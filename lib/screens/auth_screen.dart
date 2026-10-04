@@ -12,6 +12,7 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _ctl = TextEditingController();
+  late final TextEditingController _app = TextEditingController(text: widget.app.appId);
   bool _hide = true;
 
   @override
@@ -36,6 +37,13 @@ class _AuthScreenState extends State<AuthScreen> {
                     suffixIcon: IconButton(icon: Icon(_hide ? Icons.visibility : Icons.visibility_off), onPressed: () => setState(() => _hide = !_hide)),
                   ),
                 ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _app, enabled: !busy, autocorrect: false, enableSuggestions: false,
+                  style: kMono.copyWith(color: Pal.text, fontSize: 13),
+                  decoration: InputDecoration(labelText: 'Deriv App ID (PAT app)', isDense: true, filled: true, fillColor: Pal.lcd,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6))),
+                ),
                 const SizedBox(height: 12),
                 if (a.loginErrorTitle != null) Container(
                   padding: const EdgeInsets.all(10), margin: const EdgeInsets.only(bottom: 12),
@@ -49,7 +57,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ]),
                 ),
                 MetalButton(busy ? 'CONNECTING…' : 'CONNECT', filled: true, color: Pal.green,
-                    onTap: busy ? null : () { final t = _ctl.text; _ctl.clear(); a.submitPat(t); }),
+                    onTap: busy ? null : () { final t = _ctl.text; _ctl.clear(); a.submitPat(t, _app.text); }),
               ]),
             ),
           ),
@@ -59,5 +67,5 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   @override
-  void dispose() { _ctl.dispose(); super.dispose(); }
+  void dispose() { _ctl.dispose(); _app.dispose(); super.dispose(); }
 }

@@ -28,6 +28,7 @@ class AppController extends ChangeNotifier {
   final List<Map<String, dynamic>> events = [];
   int? lastConfigErr;
   bool _fromStored = false;
+  String appId = kDerivAppId;
   DateTime lastBalanceUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   Account? get active { for (final a in accounts) { if (a.id == activeId) return a; } return null; }
@@ -47,6 +48,7 @@ class AppController extends ChangeNotifier {
         _send({'t': 'init', 'dir': dir, 'appId': kDerivAppId, 'resume': false});   // cold start => never auto-resume trading
         break;
       case 'inited':
+        appId = (await _store.readAppId()) ?? kDerivAppId;
         final pat = await _store.readPat();
         if (pat != null && pat.isNotEmpty) { _fromStored = true; _login(pat); }
         else { phase = Phase.needPat; notifyListeners(); }
@@ -69,7 +71,8 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> submitPat(String raw) async {
+  Future<void> submitPat(String raw, [String? app]) async {
+    if (app != null && app.trim().isNotEmpty) appId = app.trim();
     final pat = raw.trim();
     if (pat.length < 8 || pat.contains(RegExp(r'\s'))) {
       loginErrorTitle = 'PAT_INVALID'; loginErrorBody = 'That does not look like a token.';
@@ -84,14 +87,14 @@ class AppController extends ChangeNotifier {
     phase = Phase.authenticating; loginErrorTitle = loginErrorBody = loginErrorTech = null;
     maskedPat = '••••${pat.substring(pat.length - 4)}';          // never show the full token after submission
     notifyListeners();
-    _send({'t': 'login', 'pat': pat});
+    _send({'t': 'login', 'pat': pat, 'appId': appId});
     _pendingPat = pat;
   }
   String? _pendingPat;
 
   Future<void> _onLogin(Map m) async {
     if (m['ok'] == true) {
-      if (_pendingPat != null) await _store.writePat(_pendingPat!);
+      if (_pendingPat != null) { await _store.writePat(_pendingPat!); await _store.writeAppId(appId); }
       _pendingPat = null;
       accounts = (m['accounts'] as List).map((a) => Account.fromJson({
             'account_id': (a as Map)['id'], 'account_type': a['type'], 'currency': a['currency'],

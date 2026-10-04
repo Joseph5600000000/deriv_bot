@@ -38,7 +38,7 @@ class _Worker {
     try {
       switch (m['t']) {
         case 'init': await _init(m); break;
-        case 'login': await _login(m['pat'] as String); break;
+        case 'login': rest = DerivRest((m['appId'] as String).trim()); await _login(m['pat'] as String); break;
         case 'select': await _select(m['id'] as String); break;
         case 'config': _config(m['cfg'] as Map); break;
         case 'cmd': _cmd(m['cmd'] as int); break;

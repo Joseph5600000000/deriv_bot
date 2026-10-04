@@ -6,5 +6,7 @@ class SecureStore {
   static const _s = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
   Future<String?> readPat() async { try { return await _s.read(key: _k); } catch (_) { return null; } }
   Future<void> writePat(String pat) => _s.write(key: _k, value: pat);
+  Future<String?> readAppId() async { try { return await _s.read(key: 'deriv_app_id_v1'); } catch (_) { return null; } }
+  Future<void> writeAppId(String v) => _s.write(key: 'deriv_app_id_v1', value: v);
   Future<void> clearPat() async { try { await _s.delete(key: _k); } catch (_) {} }
 }

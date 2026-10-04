@@ -4,6 +4,9 @@ import 'dart:io';
 import '../core/constants.dart';
 import '../core/errors.dart';
 
+// Deriv returns balance as a STRING in the accounts list (e.g. "9978.59"), so accept both.
+double _toD(dynamic v) => v is num ? v.toDouble() : (double.tryParse('$v') ?? 0);
+
 class Account {
   final String id, type, currency, status;
   final double balance;
@@ -12,7 +15,7 @@ class Account {
   bool get active => status == 'active';
   factory Account.fromJson(Map j) => Account(
         j['account_id'] as String, j['account_type'] as String? ?? 'demo', j['currency'] as String? ?? 'USD',
-        j['status'] as String? ?? 'active', (j['balance'] as num?)?.toDouble() ?? 0);
+        j['status'] as String? ?? 'active', _toD(j['balance']));
   Map<String, dynamic> toJson() => {'id': id, 'type': type, 'currency': currency, 'status': status, 'balance': balance};
 }
 
@@ -26,7 +29,7 @@ class DerivRest {
     final j = await _call('GET', '/trading/v1/options/accounts', pat);
     final data = (j is Map ? j['data'] : null);
     if (data is! List) throw DerivException(Err.accountNotFound, 'Unexpected accounts response shape');
-    return data.whereType<Map>().map(Account.fromJson).toList();
+    return data.whereType<Map>().where((m) => m['account_id'] is String).map(Account.fromJson).toList();
   }
 
   /// Returns the ready-to-use wss URL with a fresh one-time password embedded.
@@ -51,7 +54,7 @@ class DerivRest {
       dynamic j;
       try { j = jsonDecode(body); } catch (_) {}
       if (res.statusCode >= 200 && res.statusCode < 300) return j;
-      throw _map(res.statusCode, j, otp);
+      throw _map(res.statusCode, j, otp, body);
     } on TimeoutException {
       throw DerivException(Err.network, 'Request timed out', retryable: true);
     } on IOException catch (e) {
@@ -61,13 +64,18 @@ class DerivRest {
     }
   }
 
-  DerivException _map(int status, dynamic j, bool otp) {
+  DerivException _map(int status, dynamic j, bool otp, String body) {
     String code = '', msg = '';
     if (j is Map && j['errors'] is List && (j['errors'] as List).isNotEmpty) {
       final e = (j['errors'] as List).first;
       if (e is Map) { code = '${e['code'] ?? ''}'; msg = '${e['message'] ?? ''}'; }
     }
-    final tech = 'HTTP $status${code.isEmpty ? '' : ' $code'}${msg.isEmpty ? '' : ': $msg'}';
+    var raw = '';
+    if (code.isEmpty && msg.isEmpty && body.isNotEmpty) {
+      raw = ': ${body.replaceAll(RegExp(r'\s+'), ' ')}';
+      if (raw.length > 180) raw = '${raw.substring(0, 180)}...';
+    }
+    final tech = 'HTTP $status${code.isEmpty ? '' : ' $code'}${msg.isEmpty ? '' : ': $msg'}$raw [AppID ${appId.length > 6 ? '${appId.substring(0, 4)}...' : appId}]';
     final lower = '$code $msg'.toLowerCase();
     if (status == 401) {
       return DerivException(lower.contains('expired') ? Err.patExpired : Err.patInvalid, '$tech (also check Deriv-App-ID)');
