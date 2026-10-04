@@ -134,10 +134,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ---- LIVE TICK PANEL ----
   Widget _ticks(TcState s) {
-    final n = s.recent_count as int;
+    final n = s.recent_count;
+    final digits = a.snap.recentDigits();
     final shown = <Widget>[];
     for (int i = 0; i < n; i++) {
-      final d = s.recent[i];
+      final d = digits[i];
       final isCur = i == n - 1, isPrev = i == n - 2;
       final trig = isCur && s.trigger_status == 1;
       shown.add(Container(

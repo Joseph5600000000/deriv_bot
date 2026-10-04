@@ -143,6 +143,8 @@ class CoreEngine {
 class EngineSnap {
   final Pointer<TcState> _p = calloc<TcState>();
   TcState get s => _p.ref;
+  /// Array indexing needs dart:ffi's extension in scope, so it lives here (this file imports it).
+  List<int> recentDigits() { final r = _p.ref; return [for (int i = 0; i < 16; i++) r.recent[i]]; }
   void load(Uint8List b) {
     if (b.length != sizeOf<TcState>()) return;
     _p.cast<Uint8>().asTypedList(b.length).setAll(0, b);
