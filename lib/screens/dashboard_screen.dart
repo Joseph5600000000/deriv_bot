@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../core/errors.dart';
+import '../ffi/tc_structs.dart';
 import '../state/app_controller.dart';
 import '../widgets/panel.dart';
 import 'config_screen.dart';
@@ -38,7 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ---- ACCOUNT ----
-  Widget _account(dynamic s) {
+  Widget _account(TcState s) {
     final acc = a.active;
     final real = a.activeType == 'real';
     return Panel(
@@ -96,7 +97,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ---- MARKET ----
-  Widget _market(dynamic s) => Panel(title: 'MARKET', child: Wrap(spacing: 6, runSpacing: 6, children: [
+  Widget _market(TcState s) => Panel(title: 'MARKET', child: Wrap(spacing: 6, runSpacing: 6, children: [
         for (int i = 0; i < 5; i++) ChoiceChip(
           label: Text(kMarketNames[i], style: TextStyle(fontSize: 11, color: s.market == i ? Colors.black : Pal.text)),
           selected: s.market == i, selectedColor: Pal.amber, backgroundColor: Pal.lcd,
@@ -104,7 +105,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ]));
 
   // ---- LIVE ANALYSIS ----
-  Widget _analysis(dynamic s) {
+  Widget _analysis(TcState s) {
     final c = _signColor(s.deviation_sign);
     final has = s.prev_digit >= 0;
     final dirName = !has ? '-' : (s.deviation_sign > 0 ? 'POSITIVE' : s.deviation_sign < 0 ? 'NEGATIVE' : 'ZERO');
@@ -132,7 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ---- LIVE TICK PANEL ----
-  Widget _ticks(dynamic s) {
+  Widget _ticks(TcState s) {
     final n = s.recent_count as int;
     final shown = <Widget>[];
     for (int i = 0; i < n; i++) {
@@ -151,7 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ---- SIGNAL ----
-  Widget _signal(dynamic s) {
+  Widget _signal(TcState s) {
     final q = s.trigger_status == 1;
     return Panel(title: 'SIGNAL', trailing: Text(q ? 'QUALIFIED' : 'WAITING', style: TextStyle(color: q ? Pal.amber : Pal.dim, fontWeight: FontWeight.w800, fontSize: 11)),
       child: Row(children: [
@@ -162,7 +163,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ---- EXECUTION ----
-  Widget _execution(dynamic s) {
+  Widget _execution(TcState s) {
     final res = kResultNames[s.last_result];
     final rc = s.last_result == 1 ? Pal.green : (s.last_result == 2 ? Pal.red : Pal.dim);
     return Panel(
@@ -202,7 +203,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ---- BOT CONTROL ----
-  Widget _controls(dynamic s) {
+  Widget _controls(TcState s) {
     final emer = s.emergency_latched == 1;
     return Panel(title: 'BOT CONTROL', child: Column(children: [
       Row(children: [
