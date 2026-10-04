@@ -120,6 +120,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Uncaught async error: show it in the EVENTS panel / login screen instead of dying silently.
+  void fatal(String m) {
+    events.insert(0, {'level': 'error', 'code': Err.unknown, 'msg': m, 'ts': 0});
+    if (phase != Phase.ready) { loginErrorTitle = 'APP ERROR'; loginErrorBody = 'Unexpected error - send me a screenshot.'; loginErrorTech = m; phase = Phase.needPat; }
+    notifyListeners();
+  }
+
   void selectAccount(String id) => _send({'t': 'select', 'id': id});
   void applyConfig(StrategyConfig c) { cfg = c; lastConfigErr = null; _send({'t': 'config', 'cfg': c.toJson()}); notifyListeners(); }
   void command(int c) => _send({'t': 'cmd', 'cmd': c});
