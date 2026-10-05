@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -29,12 +31,54 @@ class AppController extends ChangeNotifier {
   int? lastConfigErr;
   bool _fromStored = false;
   String appId = kDerivAppId;
+  // ---- display-only currency view (never touches account currency, stake or execution) ----
+  static const double defaultKesRate = 129.0;   // KES per 1 USD - editable in Settings; not fetched live
+  bool kesView = false;
+  double kesRate = defaultKesRate;
+  int cfgVersion = 0;
+  String _dir = '';
+  bool get canConvert => kesView && activeCurrency == 'USD';
+  /// Format a native-currency amount for display. In KES view only USD accounts are converted.
+  String money(double native, {bool sign = false}) {
+    final v = canConvert ? native * kesRate : native;
+    final t = _group(v.abs().toStringAsFixed(2));
+    final s = v < 0 ? '-' : (sign && v > 0 ? '+' : '');
+    return '$s${canConvert ? 'KES ' : ''}$t';
+  }
+  String get nativeLabel => activeCurrency ?? '';
+  String nativeText(double native) => '${_group(native.toStringAsFixed(2))} ${activeCurrency ?? ''}';
+  static String _group(String x) {
+    final p = x.split('.'); final d = p[0];
+    final b = StringBuffer();
+    for (int i = 0; i < d.length; i++) { if (i > 0 && (d.length - i) % 3 == 0) b.write(','); b.write(d[i]); }
+    return '$b.${p[1]}';
+  }
+  Future<void> _loadPrefs() async {
+    try {
+      final f = File('$_dir/ui_prefs.json');
+      if (await f.exists()) {
+        final j = jsonDecode(await f.readAsString()) as Map;
+        kesView = j['kes'] == true; kesRate = (j['rate'] as num?)?.toDouble() ?? defaultKesRate;
+      }
+    } catch (_) {}
+  }
+  Future<void> _savePrefs() async {
+    try { await File('$_dir/ui_prefs.json').writeAsString(jsonEncode({'kes': kesView, 'rate': kesRate})); } catch (_) {}
+  }
+  void setKesView(bool v) { kesView = v; _savePrefs(); notifyListeners(); }
+  void setKesRate(double r) { if (r > 0 && r < 10000) { kesRate = r; _savePrefs(); notifyListeners(); } }
+
+  /// Clears trade history + statistics only (confirmed in the UI first).
+  void clearHistory() { trades.clear(); _send({'t': 'clearHistory'}); notifyListeners(); }
+
   DateTime lastBalanceUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   Account? get active { for (final a in accounts) { if (a.id == activeId) return a; } return null; }
 
   Future<void> boot() async {
     final dir = (await getApplicationSupportDirectory()).path;
+    _dir = dir;
+    await _loadPrefs();
     _iso = await Isolate.spawn(tradingWorkerMain, _rx.sendPort);
     _rx.listen((m) => _onMsg(m as Map, dir));
   }
@@ -53,7 +97,7 @@ class AppController extends ChangeNotifier {
         if (pat != null && pat.isNotEmpty) { _fromStored = true; _login(pat); }
         else { phase = Phase.needPat; notifyListeners(); }
         break;
-      case 'cfg': cfg = StrategyConfig.fromJson(m['cfg'] as Map); notifyListeners(); break;
+      case 'cfg': cfg = StrategyConfig.fromJson(m['cfg'] as Map); cfgVersion++; notifyListeners(); break;
       case 'loginResult': await _onLogin(m); break;
       case 'account':
         activeId = m['id'] as String; activeType = m['type'] as String; activeCurrency = m['currency'] as String;

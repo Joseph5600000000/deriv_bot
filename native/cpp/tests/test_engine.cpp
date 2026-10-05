@@ -129,9 +129,47 @@ static void test_snapshot_and_reconcile() {
   CHECK(v.st().last_result == TC_RES_UNCONFIRMED && v.st().total_trades == 0);                                       // never assumed win/loss
   TcRecord rec; CHECK(engine_get_last_record(v.h, &rec) == 1 && rec.result == TC_RES_UNCONFIRMED);
 }
-static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 18 * 8 && s[1] == (35 + 16 + 7) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
+
+// digits that give deviation d = (cur-prev)/2 ending on trigger digit 2: -2.0 => 6,2 ; -1.0 => 4,2
+static void test_loss_dev_filter() {
+  auto mk = [](T& t, int filter) { TcConfig c = t.cfg(); c.deviation_direction = 1; c.trigger_digit = 2; c.consecutive_count = 1;
+    c.loss_dev_filter = filter; engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START); };
+  { T t; mk(t, 1);
+    t.feed({6, 2}); CHECK(t.r.action == TC_ACT_EXECUTE); lose(t);                    // -2.0 LOSS
+    CHECK(t.st().restricted_dev2 == -4);
+    t.feed({4, 2}); CHECK(t.r.action == TC_ACT_EXECUTE); lose(t);                    // -1.0 LOSS (earlier -2.0 discarded)
+    CHECK(t.st().restricted_dev2 == -2 && t.st().recovery_level == 2 && t.st().losses == 2);
+    TcState b = t.st();
+    t.feed({4, 2}); CHECK(t.r.action == TC_ACT_FILTERED);                            // -1.0 REJECT
+    TcState a = t.st();
+    CHECK(a.total_trades == b.total_trades && a.recovery_level == b.recovery_level && a.martingale_level == b.martingale_level
+          && a.fsm_state == TC_FSM_MONITORING && a.consec_neg == 1 && a.filter_rejects == 1 && a.losses == b.losses);
+    t.feed({6, 2}); CHECK(t.r.action == TC_ACT_EXECUTE);                             // -2.0 ALLOW (earlier loss deviation no longer restricted)
+    win(t); CHECK(t.st().restricted_dev2 == 99);                                     // win consumes the restriction
+    t.feed({4, 2}); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  { T t; mk(t, 0);                                                                   // OFF: identical to legacy behaviour
+    t.feed({6, 2}); lose(t); t.feed({6, 2}); CHECK(t.r.action == TC_ACT_EXECUTE); CHECK(t.st().restricted_dev2 == 99 && t.st().filter_rejects == 0); }
+  { T t; mk(t, 1); t.feed({6, 2}); lose(t);                                          // restriction survives snapshot/restore
+    std::vector<uint8_t> b(8192); int n = engine_serialize(t.h, b.data(), (int)b.size());
+    T r; CHECK(engine_restore(r.h, b.data(), n, 1) == 0); CHECK(r.st().restricted_dev2 == -4);
+    r.ready(); r.ep = t.ep; r.feed({6, 2}); CHECK(r.r.action == TC_ACT_FILTERED); }
+  { T t; mk(t, 1); t.feed({6, 2}); lose(t); TcConfig c = t.cfg(); c.deviation_direction = 1; c.trigger_digit = 2; c.consecutive_count = 1;
+    c.loss_dev_filter = 0; engine_configure(t.h, &c); CHECK(t.st().restricted_dev2 == 99); }                      // turning OFF drops it
+}
+static void test_clear_history() {
+  T t; TcConfig c = t.cfg(); c.martingale_enabled = 1; c.martingale_multiplier = 2; c.martingale_max_steps = 5; c.max_daily_loss = 50;
+  engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);
+  t.feed({0,7,8}); lose(t); t.feed({0,7,8}); win(t, 2.0); t.feed({0,7,8}); lose(t);
+  TcState b = t.st(); CHECK(b.total_trades == 3 && b.wins == 1 && b.losses == 2);
+  CHECK(engine_command(t.h, TC_CMD_CLEAR_HISTORY) == 0);
+  TcState a = t.st();
+  CHECK(a.total_trades == 0 && a.wins == 0 && a.losses == 0 && a.last_result == 0); NEAR(a.stats_pnl, 0.0);
+  CHECK(a.recovery_level == b.recovery_level && a.martingale_level == b.martingale_level && a.consec_losses == b.consec_losses);
+  NEAR(a.session_pnl, b.session_pnl); NEAR(a.daily_pnl, b.daily_pnl); CHECK(a.bot_status == b.bot_status && a.fsm_state == b.fsm_state);
+}
+static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 19 * 8 && s[1] == (38 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
   test_math(); test_sequences(); test_trigger(); test_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_abi();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

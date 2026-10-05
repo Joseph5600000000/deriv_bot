@@ -16,10 +16,10 @@ static const char* kSymbols[5] = {"R_10", "R_25", "R_50", "R_75", "R_100"};
 
 struct Persist {                       // everything that must survive a restart (POD)
   TcConfig cfg; RollingWindow w; TcRecord rec; TcRecord last_done;
-  int64_t last_epoch, trade_seq, total_trades, open_contract, record_seq, day_index, recent[16];
-  double balance, session_pnl, daily_pnl, last_profit;
+  int64_t last_epoch, trade_seq, total_trades, open_contract, record_seq, day_index, recent[16], filter_rejects;
+  double balance, session_pnl, daily_pnl, last_profit, stats_pnl;
   int32_t has_cfg, bot, fsm, recovery, mlevel, wins, losses, consec_losses, last_result, last_error,
-          needs_reconcile, emergency, account_real, sig_dir, sig_barrier, trig_status, recent_count, balance_known;
+          needs_reconcile, emergency, account_real, sig_dir, sig_barrier, trig_status, recent_count, balance_known, has_restrict, restrict_dev2;
   char account_id[32]; char currency[16];
 };
 
@@ -35,7 +35,9 @@ class Engine {
       if (busy) return TC_ERR_BUSY;
       p_.w.reset(); p_.recent_count = 0; p_.trig_status = 0;      // different market => different digit stream
     }
-    p_.cfg = *c; p_.has_cfg = 1; return 0;
+    p_.cfg = *c; p_.has_cfg = 1;
+    if (!p_.cfg.loss_dev_filter) p_.has_restrict = 0;
+    return 0;
   }
 
   int command(int cmd) {
@@ -53,7 +55,9 @@ class Engine {
       case TC_CMD_RESET_ANALYSIS: p_.w.reset(); p_.recent_count = 0; p_.trig_status = 0; break;
       case TC_CMD_RESET_STRATEGY:
         if (p_.fsm == TC_FSM_EXECUTING || p_.fsm == TC_FSM_OPEN) return TC_ERR_BUSY;
-        p_.recovery = 0; p_.mlevel = 0; p_.consec_losses = 0; p_.session_pnl = 0; break;
+        p_.recovery = 0; p_.mlevel = 0; p_.consec_losses = 0; p_.session_pnl = 0; p_.has_restrict = 0; break;
+      case TC_CMD_CLEAR_HISTORY:       // statistics only: risk accumulators, recovery, config and live trade are untouched
+        p_.wins = 0; p_.losses = 0; p_.total_trades = 0; p_.last_result = 0; p_.last_profit = 0; p_.stats_pnl = 0; break;
       default: return TC_ERR_UNKNOWN;
     }
     sync_idle(); return 0;
@@ -97,6 +101,10 @@ class Engine {
     p_.sig_barrier = p_.has_cfg ? (int)barrier_for(p_.cfg, p_.recovery) : -1;
     if (!q || p_.bot != TC_BOT_RUNNING || p_.fsm != TC_FSM_MONITORING) return;
 
+    // Loss-Deviation Filter: same exact (integer, doubled) deviation as the last loss => skip, keep monitoring.
+    if (p_.cfg.loss_dev_filter && p_.has_restrict && (p_.w.cur - p_.w.prev) == p_.restrict_dev2) {
+      p_.filter_rejects++; out->action = TC_ACT_FILTERED; return;
+    }
     go(TC_FSM_TRIGGER_DETECTED); go(TC_FSM_VALIDATING);
     int64_t barrier = barrier_for(p_.cfg, p_.recovery);
     double stake = stake_for(p_.cfg, p_.mlevel);
@@ -192,6 +200,8 @@ class Engine {
     s->open_contract_id = p_.open_contract; s->last_trade_id = p_.trade_seq; s->needs_reconcile = p_.needs_reconcile;
     s->emergency_latched = p_.emergency; s->recent_count = p_.recent_count; s->record_seq = p_.record_seq;
     s->last_tick_epoch = p_.last_epoch;
+    s->loss_filter_on = p_.has_cfg ? p_.cfg.loss_dev_filter : 0; s->restricted_dev2 = p_.has_restrict ? p_.restrict_dev2 : 99;
+    s->filter_rejects = p_.filter_rejects; s->stats_pnl = p_.stats_pnl;
     for (int i = 0; i < 16; i++) s->recent[i] = p_.recent[i];
     s->average = p_.w.average; s->deviation = p_.w.deviation;
     s->current_stake = p_.has_cfg ? stake_for(p_.cfg, p_.mlevel) : 0;
@@ -254,7 +264,7 @@ class Engine {
   void finalize() { p_.last_done = p_.rec; p_.record_seq++; }
   void settle(bool win, double profit) {
     go(TC_FSM_SETTLED); go(TC_FSM_STATE_UPDATE);
-    p_.total_trades++; p_.session_pnl += profit; p_.daily_pnl += profit; p_.last_profit = profit;
+    p_.total_trades++; p_.stats_pnl += profit; p_.session_pnl += profit; p_.daily_pnl += profit; p_.last_profit = profit;
     p_.rec.profit = profit; p_.rec.result = win ? TC_RES_WIN : TC_RES_LOSS; p_.last_result = p_.rec.result;
     if (win) {
       p_.wins++; p_.consec_losses = 0; p_.mlevel = 0;
@@ -263,6 +273,10 @@ class Engine {
       p_.losses++; p_.consec_losses++;
       if (p_.cfg.martingale_enabled) p_.mlevel++;
       if (p_.recovery < 2) p_.recovery++;                                                    // RECOVERY_2 holds on further losses
+    }
+    if (p_.cfg.loss_dev_filter) {
+      if (win) p_.has_restrict = 0;                                   // restriction consumed by an allowed winning trade
+      else { p_.restrict_dev2 = (int32_t)(p_.rec.cur_digit - p_.rec.prev_digit); p_.has_restrict = 1; }   // only the latest loss
     }
     p_.open_contract = 0; p_.needs_reconcile = 0; finalize();
     RiskView r{p_.session_pnl, p_.daily_pnl, p_.balance, p_.balance_known, p_.consec_losses, p_.mlevel};

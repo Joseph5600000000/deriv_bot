@@ -15,6 +15,7 @@ final class TcConfig extends Struct {
   @Int64() external int martingale_max_steps;
   @Int64() external int max_consecutive_losses;
   @Int64() external int win_behavior;
+  @Int64() external int loss_dev_filter;
   @Double() external double stake;
   @Double() external double take_profit;
   @Double() external double stop_loss;
@@ -72,6 +73,9 @@ final class TcState extends Struct {
   @Int64() external int lat_send_to_ack_us;
   @Int64() external int lat_ack_to_open_us;
   @Int64() external int lat_total_us;
+  @Int64() external int loss_filter_on;
+  @Int64() external int restricted_dev2;
+  @Int64() external int filter_rejects;
   @Array(16) external Array<Int64> recent;
   @Double() external double average;
   @Double() external double deviation;
@@ -80,6 +84,7 @@ final class TcState extends Struct {
   @Double() external double session_pnl;
   @Double() external double daily_pnl;
   @Double() external double last_profit;
+  @Double() external double stats_pnl;
 }
 
 final class TcRecord extends Struct {

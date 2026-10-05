@@ -28,6 +28,6 @@ class Fsm {
   static const names = ['IDLE', 'MONITORING', 'TRIGGER_DETECTED', 'VALIDATING', 'EXECUTING', 'OPEN', 'SETTLED', 'STATE_UPDATE'];
 }
 class Cmd {
-  static const int start = 1, pause = 2, stop = 3, emergencyStop = 4, clearEmergency = 5, resetAnalysis = 6, resetStrategy = 7;
+  static const int start = 1, pause = 2, stop = 3, emergencyStop = 4, clearEmergency = 5, resetAnalysis = 6, resetStrategy = 7, clearHistory = 8;
 }
 const List<String> kResultNames = ['-', 'WIN', 'LOSS', 'REJECTED', 'UNCONFIRMED'];

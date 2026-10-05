@@ -42,3 +42,10 @@ If any step fights you, use Path B.
 3. Watch TICKS and LIVE ANALYSIS for a few minutes; open EXECUTION > PERF.
 4. START with stake at the minimum on Demo. Toggle airplane mode during a run to check reconnect.
 5. Only after clean Demo runs consider Real, with small stake and tight max daily loss.
+
+
+## Upgrade notes (v2)
+- Loss-Deviation Filter: engine-level, compares exact doubled-integer deviations (cur-prev). Strategy tab > GLOBAL FILTER.
+- Clear Trade History (History tab): clears trades/win-loss/stats only. Risk accumulators (session/daily P/L, consecutive losses) are kept so limits still work.
+- Currency View (Settings): USD or KES, display only, user-set rate (default 129.00, not live).
+- Saved engine state from v1 is ignored once (snapshot format v2). Nothing is traded from it.

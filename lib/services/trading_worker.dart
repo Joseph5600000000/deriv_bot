@@ -43,6 +43,7 @@ class _Worker {
         case 'config': _config(m['cfg'] as Map); break;
         case 'cmd': _cmd(m['cmd'] as int); break;
         case 'logout': await _logout(); break;
+        case 'clearHistory': await _clearHistory(); break;
       }
     } catch (e) {
       _event('error', Err.unknown, 'Internal error: ${e.runtimeType}');
@@ -91,6 +92,14 @@ class _Worker {
     }
   }
 
+  /// Statistics only. Strategy, recovery, risk accumulators, config, account and any live trade are untouched.
+  Future<void> _clearHistory() async {
+    eng.command(Cmd.clearHistory);
+    try { final f = File('$_dir/trades.jsonl'); if (await f.exists()) await f.delete(); } catch (_) {}
+    _persistSoon(); _dirty = true;
+    _event('info', Err.none, 'Trade history and statistics cleared.');
+  }
+
   Future<void> _logout() async {
     eng.command(Cmd.pause);
     eng.setConn(1, Conn.disconnected);
@@ -134,6 +143,8 @@ class _Worker {
     final r = eng.processTick((t['epoch'] as num).toInt(), (t['quote'] as num).toDouble(), (t['pip_size'] as num?)?.toInt() ?? 2, rx);
     if (r.action == 1 && r.payload != null) {
       _sendBuy(r.payload!, r.tradeId);                      // immediately, before any bookkeeping
+    } else if (r.action == 3) {
+      _event('info', Err.none, 'Trigger skipped by Loss-Deviation Filter (same deviation as last loss).');
     } else if (r.action == 2) {
       _event('warn', r.errorCode, 'Trigger blocked: ${errInfo(r.errorCode).name}');
     }

@@ -17,6 +17,7 @@ typedef struct TcConfig {
   int64_t martingale_max_steps;
   int64_t max_consecutive_losses;
   int64_t win_behavior;
+  int64_t loss_dev_filter;
   double stake;
   double take_profit;
   double stop_loss;
@@ -72,6 +73,9 @@ typedef struct TcState {
   int64_t lat_send_to_ack_us;
   int64_t lat_ack_to_open_us;
   int64_t lat_total_us;
+  int64_t loss_filter_on;
+  int64_t restricted_dev2;
+  int64_t filter_rejects;
   int64_t recent[16];
   double average;
   double deviation;
@@ -80,6 +84,7 @@ typedef struct TcState {
   double session_pnl;
   double daily_pnl;
   double last_profit;
+  double stats_pnl;
 } TcState;
 typedef struct TcRecord {
   int64_t trade_id;
