@@ -62,6 +62,7 @@ class HistoryScreen extends StatelessWidget {
               ),
             ]),
           ),
+          const CopyrightFooter(),
         ]);
       },
     );
@@ -71,13 +72,36 @@ class HistoryScreen extends StatelessWidget {
     final profit = (t['profit'] as num).toDouble();
     final res = t['result'] as int;
     final c = res == 1 ? Pal.green : (res == 2 ? Pal.red : Pal.amber);
+    final outcome = (t['outcome'] as num?)?.toInt() ?? -1;       // -1 = Deriv did not provide it
+    final dir = t['direction'] == 0 ? 'OVER' : 'UNDER';
+    final barrier = (t['barrier'] as num).toInt();
+    // integrity hint only (never used to fill the digit): does the reported outcome agree with the reported result?
+    bool? agrees;
+    if (outcome >= 0 && (res == 1 || res == 2)) {
+      final wouldWin = t['direction'] == 0 ? outcome > barrier : outcome < barrier;
+      agrees = wouldWin == (res == 1);
+    }
+    const resNames = {1: 'WIN', 2: 'LOSS', 3: 'REJECTED', 4: 'UNCONFIRMED'};
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(children: [
         Led(c, size: 9), const SizedBox(width: 10),
-        Expanded(child: Text('#${t['trade_id']}  ${t['direction'] == 0 ? 'OVER' : 'UNDER'} ${t['barrier']}   ${t['prev']}→${t['cur']}   R${t['recovery']} M${t['martingale']}',
-            style: kMono.copyWith(color: Pal.onDeep, fontSize: 11.5))),
-        Text(app.money(profit, sign: true), style: kMono.copyWith(color: c, fontSize: 12, fontWeight: FontWeight.w700)),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text.rich(TextSpan(style: kMono.copyWith(color: Pal.onDeep, fontSize: 13, fontWeight: FontWeight.w600), children: [
+              TextSpan(text: '$dir $barrier'),
+              const TextSpan(text: '  →  Outcome: ', style: TextStyle(color: Pal.onDeepDim, fontWeight: FontWeight.w400)),
+              TextSpan(text: outcome >= 0 ? '$outcome' : '—', style: const TextStyle(color: Pal.lime, fontWeight: FontWeight.w800, fontSize: 15)),
+              const TextSpan(text: '  →  ', style: TextStyle(color: Pal.onDeepDim, fontWeight: FontWeight.w400)),
+              TextSpan(text: resNames[res] ?? '-', style: TextStyle(color: c, fontWeight: FontWeight.w800)),
+              if (agrees == false) const TextSpan(text: '  ⚠', style: TextStyle(color: Pal.amber)),
+            ])),
+            const SizedBox(height: 2),
+            Text('#${t['trade_id']}   trigger ${t['prev']}→${t['cur']}   R${t['recovery']} M${t['martingale']}',
+                style: kMono.copyWith(color: Pal.onDeepDim, fontSize: 10.5)),
+          ]),
+        ),
+        Text(app.money(profit, sign: true), style: kMono.copyWith(color: c, fontSize: 13, fontWeight: FontWeight.w700)),
       ]),
     );
   }

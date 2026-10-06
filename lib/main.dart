@@ -32,7 +32,7 @@ class DerivBotApp extends StatelessWidget {
   const DerivBotApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Deriv Digit Bot', debugShowCheckedModeBanner: false,
+        title: 'DeltaDesk', debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true, brightness: Brightness.light, scaffoldBackgroundColor: Pal.bg, canvasColor: Pal.card,
           colorScheme: ColorScheme.fromSeed(seedColor: Pal.deep, brightness: Brightness.light).copyWith(primary: Pal.deep, secondary: Pal.lime, surface: Pal.card),

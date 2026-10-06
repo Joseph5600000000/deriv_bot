@@ -49,3 +49,9 @@ If any step fights you, use Path B.
 - Clear Trade History (History tab): clears trades/win-loss/stats only. Risk accumulators (session/daily P/L, consecutive losses) are kept so limits still work.
 - Currency View (Settings): USD or KES, display only, user-set rate (default 129.00, not live).
 - Saved engine state from v1 is ignored once (snapshot format v2). Nothing is traded from it.
+
+## Upgrade notes (v3 - DeltaDesk branding)
+- App label/titles = "DeltaDesk". Package id (com.example.deriv_bot) is unchanged on purpose, so the APK installs OVER the old app.
+- Outcome digit: last digit of the settled contract's `exit_spot` (Deriv removed `exit_tick_display_value` in the new API), computed with the market's pip size. Fallback: the tick we received at `exit_spot_time`. If Deriv gives neither, History shows a dash. A warning mark appears only if the outcome contradicts the reported WIN/LOSS.
+- Icon rebuilt from assets/branding/source_reference.jpg by tools/make_icons.py (adaptive + themed/monochrome + legacy + splash).
+- "@kinuu©" footer (italic) on every screen; About panel in Settings.

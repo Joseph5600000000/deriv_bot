@@ -35,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 10),
                 Led(_connColor(s.trade_conn)), const SizedBox(width: 5), Text(Conn.names[s.trade_conn], style: const TextStyle(color: Pal.inkDim, fontSize: 11)),
               ])),
-          _accountSelector(s), _balance(s), _market(s), _analysis(s), _ticks(s), _signal(s), _execution(s), _controls(s), _events(),
+          _accountSelector(s), _balance(s), _market(s), _analysis(s), _ticks(s), _signal(s), _execution(s), _controls(s), _events(), const CopyrightFooter(),
         ]);
       },
     );
@@ -237,8 +237,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: Lcd('SESSION P/L', a.money(s.session_pnl, sign: true), color: s.session_pnl >= 0 ? Pal.green : Pal.red, size: 14)), const SizedBox(width: 8),
-          Expanded(child: Lcd('LATENCY', _ms(s.lat_total_us), size: 14)),
+          Expanded(flex: 3, child: Lcd('SESSION P/L', a.money(s.session_pnl, sign: true), color: s.session_pnl >= 0 ? Pal.green : Pal.red, size: 14)), const SizedBox(width: 8),
+          Expanded(flex: 2, child: Lcd('OUTCOME', a.lastOutcome, color: Pal.lime, size: 16)), const SizedBox(width: 8),
+          Expanded(flex: 3, child: Lcd('LATENCY', _ms(s.lat_total_us), size: 14)),
         ]),
         if (a.canConvert) const Padding(padding: EdgeInsets.only(top: 8),
             child: Align(alignment: Alignment.centerLeft, child: Text('Stake and execution always use the account currency. KES amounts are converted for display only.', style: TextStyle(color: Pal.onDeepDim, fontSize: 10)))),

@@ -25,6 +25,14 @@ class _AuthScreenState extends State<AuthScreen> {
         child: Center(
           child: SingleChildScrollView(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+                child: Row(children: [
+                  ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.asset('assets/branding/logo.png', width: 52, height: 52)),
+                  const SizedBox(width: 12),
+                  const Text('DeltaDesk', style: TextStyle(color: Pal.ink, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+                ]),
+              ),
               const Padding(
                 padding: EdgeInsets.fromLTRB(24, 8, 24, 4),
                 child: Text('Connect your\nDeriv account.', style: TextStyle(color: Pal.ink, fontSize: 40, fontWeight: FontWeight.w800, height: 1.05, letterSpacing: -1)),
@@ -62,6 +70,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       onTap: busy ? null : () { final t = _ctl.text; _ctl.clear(); a.submitPat(t, _app.text); }),
                 ]),
               ),
+              const CopyrightFooter(),
             ]),
           ),
         ),

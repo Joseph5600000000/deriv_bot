@@ -45,6 +45,12 @@ class AppController extends ChangeNotifier {
     final s = v < 0 ? '-' : (sign && v > 0 ? '+' : '');
     return '$s${canConvert ? 'KES ' : ''}$t';
   }
+  /// Outcome digit of the most recent recorded trade, or '-' when none / not provided by Deriv.
+  String get lastOutcome {
+    if (trades.isEmpty) return '-';
+    final o = (trades.first['outcome'] as num?)?.toInt() ?? -1;
+    return o >= 0 ? '$o' : '-';
+  }
   String get nativeLabel => activeCurrency ?? '';
   String nativeText(double native) => '${_group(native.toStringAsFixed(2))} ${activeCurrency ?? ''}';
   static String _group(String x) {

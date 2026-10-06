@@ -53,6 +53,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             MetalButton('DISCONNECT / REMOVE PAT', filled: true, color: Pal.red, onTap: () => _confirmLogout(context)),
           ]),
         ),
+        Panel(
+          title: 'ABOUT',
+          child: Row(children: [
+            ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.asset('assets/branding/logo.png', width: 44, height: 44)),
+            const SizedBox(width: 12),
+            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('DeltaDesk', style: TextStyle(color: Pal.onDeep, fontWeight: FontWeight.w800, fontSize: 16)),
+              Text('Version 1.2.0', style: TextStyle(color: Pal.onDeepDim, fontSize: 11)),
+            ])),
+          ]),
+        ),
+        const CopyrightFooter(),
       ]),
     );
   }

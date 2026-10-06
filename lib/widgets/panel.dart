@@ -15,6 +15,16 @@ class Pal {
 
 const TextStyle kMono = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
+/// Subtle brand line, shown at the bottom of every screen.
+class CopyrightFooter extends StatelessWidget {
+  const CopyrightFooter({super.key});
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.fromLTRB(0, 18, 0, 8),
+        child: Center(child: Text('@kinuu©', style: TextStyle(color: Pal.inkDim, fontSize: 11, fontStyle: FontStyle.italic, letterSpacing: 0.4))),
+      );
+}
+
 /// Page heading on the cream background.
 class ScreenTitle extends StatelessWidget {
   const ScreenTitle(this.title, {super.key, this.sub, this.trailing});

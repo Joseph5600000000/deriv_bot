@@ -32,6 +32,8 @@ class _Worker {
   StrategyConfig? _cfg;
   int _pubState = Conn.disconnected, _lastTickUs = 0, _lastRecordSeq = 0, _sentEpoch = 0, _reconTid = 0;
   bool _tradeReady = false, _dirty = false, _persistDirty = false, _persisting = false, _ready = false;
+  int _pip = 2;
+  final Map<int, int> _tickDigits = {}, _outcomes = {};   // epoch->digit (ticks we received), contract_id->settled outcome digit
   Timer? _uiTimer, _persistTimer, _staleTimer, _execTimer, _reconTimer;
 
   Future<void> handle(Map m) async {
@@ -148,7 +150,35 @@ class _Worker {
     } else if (r.action == 2) {
       _event('warn', r.errorCode, 'Trigger blocked: ${errInfo(r.errorCode).name}');
     }
+    // bookkeeping AFTER the buy has been sent (keeps the tick->trade path unchanged)
+    _pip = (t['pip_size'] as num?)?.toInt() ?? _pip;
+    if (r.digit >= 0) {
+      _tickDigits[(t['epoch'] as num).toInt()] = r.digit;
+      if (_tickDigits.length > 200) _tickDigits.remove(_tickDigits.keys.first);
+    }
     _dirty = true; _persistDirty = true;
+  }
+
+  int _digitOf(double q) { var s = 1.0; for (int i = 0; i < _pip; i++) { s *= 10; } return (q * s).round() % 10; }
+
+  /// Outcome digit = last digit of the contract's authoritative exit spot (same pip rule the engine uses).
+  /// Falls back to the exit tick's own epoch in the tick feed. Never derived from the prediction.
+  void _captureOutcome(int cid, Map p) {
+    if (_outcomes.containsKey(cid)) return;
+    int? d;
+    final raw = p['exit_spot'] ?? p['exit_tick'];
+    final v = raw == null ? null : double.tryParse('$raw');
+    if (v != null && v > 0) {
+      d = _digitOf(v);
+    } else {
+      final t = p['exit_spot_time'] ?? p['exit_tick_time'];
+      final ep = t is num ? t.toInt() : int.tryParse('$t');
+      if (ep != null) d = _tickDigits[ep];
+    }
+    if (d != null) {
+      _outcomes[cid] = d;
+      if (_outcomes.length > 100) _outcomes.remove(_outcomes.keys.first);
+    }
   }
 
   void _checkStale() {
@@ -287,6 +317,7 @@ class _Worker {
     final sold = p['is_sold'] == 1;
     int s = 0;
     if (status == 'won') s = 1; else if (status == 'lost') s = 2; else if (sold) s = profit >= 0 ? 1 : 2;
+    if (s != 0) _captureOutcome(cid, p);                     // settled: record the outcome digit before the engine finalises the trade
     if (_reconTid != 0) {                                    // reconciling an unconfirmed buy: match, never re-buy
       final pt = (p['purchase_time'] as num?)?.toInt() ?? 0;
       final since = _sentEpoch > 0 ? _sentEpoch - 5 : DateTime.now().millisecondsSinceEpoch ~/ 1000 - 120;
@@ -359,6 +390,7 @@ class _Worker {
       final rec = eng.lastRecord();
       if (rec != null) {
         rec['account'] = _acct?.id ?? '';
+        rec['outcome'] = _outcomes[(rec['contract_id'] as num).toInt()] ?? -1;   // -1 = not provided by Deriv
         ui.send({'t': 'record', 'rec': rec});
         File('$_dir/trades.jsonl').writeAsString('${jsonEncode(rec)}\n', mode: FileMode.append);
       }

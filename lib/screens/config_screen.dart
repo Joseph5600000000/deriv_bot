@@ -120,6 +120,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
           ])),
           if (_msg != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), child: Text(_msg!, style: const TextStyle(color: Color(0xFFB3261E), fontWeight: FontWeight.w600))),
           Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), child: MetalButton('SAVE STRATEGY', filled: true, onTap: _save)),
+          const CopyrightFooter(),
         ]);
       },
     );

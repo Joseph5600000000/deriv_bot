@@ -1,7 +1,7 @@
 name: deriv_bot
-description: Deriv Over/Under digit bot - Flutter UI, C++ trading core via FFI.
+description: DeltaDesk - Over/Under digit trading desk for Deriv. Flutter UI, C++ trading core via FFI.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.2.0+3
 environment:
   sdk: ">=3.3.0 <4.0.0"
 dependencies:
@@ -16,3 +16,5 @@ dev_dependencies:
   flutter_lints: ^4.0.0
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/logo.png
