@@ -18,6 +18,8 @@ typedef struct TcConfig {
   int64_t max_consecutive_losses;
   int64_t win_behavior;
   int64_t loss_dev_filter;
+  int64_t recovery_direction1;
+  int64_t recovery_direction2;
   double stake;
   double take_profit;
   double stop_loss;

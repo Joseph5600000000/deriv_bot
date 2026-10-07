@@ -91,7 +91,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return ListView(padding: const EdgeInsets.only(bottom: 24), children: [
           const ScreenTitle('Strategy', sub: 'Saved settings are enforced by the trading engine'),
           Panel(title: 'TRIGGER', child: Column(children: [
-            _seg('Direction', const ['OVER', 'UNDER'], c.direction, (i) => c.direction = i),
+            _seg('Initial direction', const ['OVER', 'UNDER'], c.direction, (i) => c.direction = i),
             _seg('Deviation', const ['POSITIVE', 'NEGATIVE'], c.deviationDirection, (i) => c.deviationDirection = i),
             _field('Consecutive deviations', 'consecutiveCount', c.consecutiveCount),
             _field('Trigger digit (0-9)', 'triggerDigit', c.triggerDigit),
@@ -100,9 +100,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
           Panel(title: 'GLOBAL FILTER', child: _switch(
             'Loss-Deviation Filter', 'After a loss, skip the next qualifying trade only if its deviation equals the losing one. Skipped signals are not trades and change no recovery or martingale state. OFF = original behaviour.',
             c.lossDevFilter, (v) => c.lossDevFilter = v)),
-          Panel(title: 'RECOVERY', child: Column(children: [
-            _field('Recovery barrier 1', 'recoveryBarrier1', c.recoveryBarrier1),
-            _field('Recovery barrier 2', 'recoveryBarrier2', c.recoveryBarrier2),
+          Panel(title: 'RECOVERY (contract type per level)', child: Column(children: [
+            _seg('Recovery 1 direction', const ['OVER', 'UNDER'], c.recoveryDirection1, (i) => c.recoveryDirection1 = i),
+            _field('Recovery barrier 1 (OVER 0-8 / UNDER 1-9)', 'recoveryBarrier1', c.recoveryBarrier1),
+            _seg('Recovery 2 direction', const ['OVER', 'UNDER'], c.recoveryDirection2, (i) => c.recoveryDirection2 = i),
+            _field('Recovery barrier 2 (OVER 0-8 / UNDER 1-9)', 'recoveryBarrier2', c.recoveryBarrier2),
             _seg('After a win', const ['RESET', 'STEP DOWN'], c.winBehavior, (i) => c.winBehavior = i),
           ])),
           Panel(title: 'STAKE & MARTINGALE', child: Column(children: [

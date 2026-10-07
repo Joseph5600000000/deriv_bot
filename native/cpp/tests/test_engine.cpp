@@ -167,9 +167,37 @@ static void test_clear_history() {
   CHECK(a.recovery_level == b.recovery_level && a.martingale_level == b.martingale_level && a.consec_losses == b.consec_losses);
   NEAR(a.session_pnl, b.session_pnl); NEAR(a.daily_pnl, b.daily_pnl); CHECK(a.bot_status == b.bot_status && a.fsm_state == b.fsm_state);
 }
-static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 19 * 8 && s[1] == (38 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
+
+static void test_recovery_directions() {
+  // initial OVER 4, recovery 1 OVER 5, recovery 2 UNDER 7 (the example)
+  T t; TcConfig c = t.cfg(); c.direction = 0; c.initial_barrier = 4; c.recovery_direction1 = 0; c.recovery_barrier1 = 5;
+  c.recovery_direction2 = 1; c.recovery_barrier2 = 7; CHECK(engine_configure(t.h, &c) == 0); t.ready(); engine_command(t.h, TC_CMD_START);
+  t.feed({0,7,8}); CHECK(t.r.direction == 0 && t.r.barrier == 4 && strstr(t.pl, "DIGITOVER") && strstr(t.pl, "\"barrier\":\"4\"")); lose(t);
+  CHECK(t.st().signal_direction == 0 && t.st().signal_barrier == 5);                           // signal panel follows the recovery level
+  t.feed({0,7,8}); CHECK(t.r.direction == 0 && t.r.barrier == 5 && strstr(t.pl, "DIGITOVER") && strstr(t.pl, "\"barrier\":\"5\"")); lose(t);
+  CHECK(t.st().signal_direction == 1 && t.st().signal_barrier == 7);
+  t.feed({0,7,8}); CHECK(t.r.direction == 1 && t.r.barrier == 7 && strstr(t.pl, "DIGITUNDER") && strstr(t.pl, "\"barrier\":\"7\"")); lose(t);
+  t.feed({0,7,8}); CHECK(t.r.direction == 1 && t.r.barrier == 7);                              // stays on RECOVERY_2 after another loss
+  win(t); CHECK(t.st().recovery_level == 0);                                                    // reset unchanged
+  t.feed({0,7,8}); CHECK(t.r.direction == 0 && t.r.barrier == 4);                              // back to the initial trade
+  // initial direction is independent: initial UNDER 3, R1 OVER 5, R2 UNDER 7
+  T u; c = u.cfg(); c.direction = 1; c.initial_barrier = 3; c.recovery_direction1 = 0; c.recovery_barrier1 = 5; c.recovery_direction2 = 1; c.recovery_barrier2 = 7;
+  CHECK(engine_configure(u.h, &c) == 0); u.ready(); engine_command(u.h, TC_CMD_START);
+  u.feed({0,7,8}); CHECK(u.r.direction == 1 && u.r.barrier == 3 && strstr(u.pl, "DIGITUNDER")); lose(u);
+  u.feed({0,7,8}); CHECK(u.r.direction == 0 && u.r.barrier == 5 && strstr(u.pl, "DIGITOVER")); lose(u);
+  u.feed({0,7,8}); CHECK(u.r.direction == 1 && u.r.barrier == 7 && strstr(u.pl, "DIGITUNDER"));
+  // each barrier is validated against ITS OWN direction
+  TcConfig bad = t.cfg(); bad.recovery_direction1 = 0; bad.recovery_barrier1 = 9; CHECK(engine_configure(t.h, &bad) == TC_ERR_INVALID_BARRIER);   // OVER 9
+  bad = t.cfg(); bad.recovery_direction2 = 1; bad.recovery_barrier2 = 0; CHECK(engine_configure(t.h, &bad) == TC_ERR_INVALID_BARRIER);               // UNDER 0
+  bad = t.cfg(); bad.recovery_direction1 = 2; CHECK(engine_configure(t.h, &bad) == TC_ERR_INVALID_CONFIG);
+  // stakes / martingale unchanged by directions
+  T m; c = m.cfg(); c.martingale_enabled = 1; c.martingale_multiplier = 2; c.martingale_max_steps = 5; c.recovery_direction2 = 1; c.recovery_barrier2 = 7;
+  engine_configure(m.h, &c); m.ready(); engine_command(m.h, TC_CMD_START);
+  m.feed({0,7,8}); NEAR(m.r.stake, 1.0); lose(m); m.feed({0,7,8}); NEAR(m.r.stake, 2.0); lose(m); m.feed({0,7,8}); NEAR(m.r.stake, 4.0); CHECK(m.r.direction == 1);
+}
+static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 21 * 8 && s[1] == (38 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
   test_math(); test_sequences(); test_trigger(); test_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_abi();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

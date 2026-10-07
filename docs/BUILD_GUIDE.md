@@ -55,3 +55,9 @@ If any step fights you, use Path B.
 - Outcome digit: last digit of the settled contract's `exit_spot` (Deriv removed `exit_tick_display_value` in the new API), computed with the market's pip size. Fallback: the tick we received at `exit_spot_time`. If Deriv gives neither, History shows a dash. A warning mark appears only if the outcome contradicts the reported WIN/LOSS.
 - Icon rebuilt from assets/branding/source_reference.jpg by tools/make_icons.py (adaptive + themed/monochrome + legacy + splash).
 - "@kinuu©" footer (italic) on every screen; About panel in Settings.
+
+## Upgrade notes (v4 - recovery directions)
+- Strategy tab > RECOVERY: independent OVER/UNDER for Recovery 1 and Recovery 2. The initial trade keeps its own direction.
+- Each barrier is validated against its own direction (OVER 0-8, UNDER 1-9). Stake, martingale, loss handling, reset unchanged.
+- Settings saved by older versions load with both recovery directions = the old initial direction, so behaviour is identical until you change them.
+- Saved engine state from earlier versions is ignored once (snapshot format v3): recovery level starts at NORMAL.

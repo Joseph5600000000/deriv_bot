@@ -8,6 +8,9 @@ inline bool barrier_ok(int dir, int64_t b) { return dir == 0 ? (b >= 0 && b <= 8
 inline int64_t barrier_for(const TcConfig& c, int level) {
   return level == 0 ? c.initial_barrier : level == 1 ? c.recovery_barrier1 : c.recovery_barrier2;
 }
+inline int64_t direction_for(const TcConfig& c, int level) {
+  return level == 0 ? c.direction : level == 1 ? c.recovery_direction1 : c.recovery_direction2;
+}
 // trigger = required consecutive run in the chosen direction AND current digit == trigger digit
 inline bool qualified(const TcConfig& c, const RollingWindow& w) {
   if (!w.has_dev) return false;

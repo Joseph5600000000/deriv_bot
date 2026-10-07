@@ -16,6 +16,8 @@ final class TcConfig extends Struct {
   @Int64() external int max_consecutive_losses;
   @Int64() external int win_behavior;
   @Int64() external int loss_dev_filter;
+  @Int64() external int recovery_direction1;
+  @Int64() external int recovery_direction2;
   @Double() external double stake;
   @Double() external double take_profit;
   @Double() external double stop_loss;

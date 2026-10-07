@@ -97,7 +97,7 @@ class Engine {
     else { memmove(p_.recent, p_.recent + 1, 15 * sizeof(int64_t)); p_.recent[15] = d; }
     bool q = p_.has_cfg && qualified(p_.cfg, p_.w);
     p_.trig_status = q ? 1 : 0;
-    p_.sig_dir = p_.has_cfg ? (int)p_.cfg.direction : 0;
+    p_.sig_dir = p_.has_cfg ? (int)direction_for(p_.cfg, p_.recovery) : 0;
     p_.sig_barrier = p_.has_cfg ? (int)barrier_for(p_.cfg, p_.recovery) : -1;
     if (!q || p_.bot != TC_BOT_RUNNING || p_.fsm != TC_FSM_MONITORING) return;
 
@@ -107,9 +107,10 @@ class Engine {
     }
     go(TC_FSM_TRIGGER_DETECTED); go(TC_FSM_VALIDATING);
     int64_t barrier = barrier_for(p_.cfg, p_.recovery);
+    int64_t dir = direction_for(p_.cfg, p_.recovery);          // Over/Under for THIS level only
     double stake = stake_for(p_.cfg, p_.mlevel);
     int err = 0;
-    if (!barrier_ok((int)p_.cfg.direction, barrier)) err = TC_ERR_INVALID_BARRIER;
+    if (!barrier_ok((int)dir, barrier)) err = TC_ERR_INVALID_BARRIER;
     else if (pub_ != TC_CONN_READY || trd_ != TC_CONN_READY) err = TC_ERR_NOT_READY;
     else if (!verified_) err = TC_ERR_ACCOUNT_MISMATCH;
     else if (p_.needs_reconcile) err = TC_ERR_STATE_SYNC_FAILED;
@@ -124,7 +125,7 @@ class Engine {
     r.trade_id = ++p_.trade_seq; r.tick_epoch = epoch; r.market = p_.cfg.market; r.account_real = p_.account_real;
     r.prev_digit = p_.w.prev; r.cur_digit = p_.w.cur; r.deviation_sign = p_.w.sign;
     r.consecutive_seq = p_.cfg.deviation_direction == 0 ? p_.w.consec_pos : p_.w.consec_neg;
-    r.trigger_digit = p_.cfg.trigger_digit; r.direction = p_.cfg.direction; r.barrier = barrier;
+    r.trigger_digit = p_.cfg.trigger_digit; r.direction = dir; r.barrier = barrier;
     r.recovery_level = p_.recovery; r.martingale_level = p_.mlevel; r.average = p_.w.average;
     r.deviation = p_.w.deviation; r.stake = stake; r.t_tick_rx_us = rx_us; r.t_digit_us = out->t_digit_us;
     r.t_trigger_us = now_us();
@@ -132,11 +133,11 @@ class Engine {
       "{\"buy\":\"1\",\"price\":%.2f,\"subscribe\":1,\"req_id\":%lld,\"parameters\":{\"amount\":%.2f,"
       "\"basis\":\"stake\",\"contract_type\":\"%s\",\"currency\":\"%s\",\"duration\":1,\"duration_unit\":\"t\","
       "\"underlying_symbol\":\"%s\",\"barrier\":\"%lld\"}}",
-      stake, (long long)r.trade_id, stake, p_.cfg.direction == 0 ? "DIGITOVER" : "DIGITUNDER", p_.currency,
+      stake, (long long)r.trade_id, stake, dir == 0 ? "DIGITOVER" : "DIGITUNDER", p_.currency,
       kSymbols[p_.cfg.market], (long long)barrier);
     r.t_request_us = now_us();
     go(TC_FSM_EXECUTING);
-    out->action = TC_ACT_EXECUTE; out->trade_id = r.trade_id; out->direction = p_.cfg.direction;
+    out->action = TC_ACT_EXECUTE; out->trade_id = r.trade_id; out->direction = dir;
     out->barrier = barrier; out->stake = stake; out->payload_len = n; out->t_trigger_us = r.t_trigger_us;
   }
 
@@ -194,7 +195,8 @@ class Engine {
     s->account_verified = verified_; s->account_real = p_.account_real; s->market = p_.has_cfg ? p_.cfg.market : 4;
     s->prev_digit = p_.w.prev; s->cur_digit = p_.w.cur; s->deviation_sign = p_.w.has_dev ? p_.w.sign : 0;
     s->consec_pos = p_.w.consec_pos; s->consec_neg = p_.w.consec_neg; s->trigger_status = p_.trig_status;
-    s->signal_direction = p_.sig_dir; s->signal_barrier = p_.sig_barrier; s->recovery_level = p_.recovery;
+    s->signal_direction = p_.has_cfg ? direction_for(p_.cfg, p_.recovery) : p_.sig_dir;   // display follows the live recovery level
+    s->signal_barrier = p_.has_cfg ? barrier_for(p_.cfg, p_.recovery) : p_.sig_barrier; s->recovery_level = p_.recovery;
     s->martingale_level = p_.mlevel; s->wins = p_.wins; s->losses = p_.losses; s->total_trades = p_.total_trades;
     s->consec_losses = p_.consec_losses; s->last_result = p_.last_result; s->last_error = p_.last_error;
     s->open_contract_id = p_.open_contract; s->last_trade_id = p_.trade_seq; s->needs_reconcile = p_.needs_reconcile;
@@ -247,8 +249,9 @@ class Engine {
  private:
   static int validate(const TcConfig& c) {
     if (c.market < 0 || c.market > 4 || (c.direction != 0 && c.direction != 1)) return TC_ERR_INVALID_CONFIG;
-    if (!barrier_ok((int)c.direction, c.initial_barrier) || !barrier_ok((int)c.direction, c.recovery_barrier1) ||
-        !barrier_ok((int)c.direction, c.recovery_barrier2)) return TC_ERR_INVALID_BARRIER;
+    if ((c.recovery_direction1 != 0 && c.recovery_direction1 != 1) || (c.recovery_direction2 != 0 && c.recovery_direction2 != 1)) return TC_ERR_INVALID_CONFIG;
+    if (!barrier_ok((int)c.direction, c.initial_barrier) || !barrier_ok((int)c.recovery_direction1, c.recovery_barrier1) ||
+        !barrier_ok((int)c.recovery_direction2, c.recovery_barrier2)) return TC_ERR_INVALID_BARRIER;
     if (c.trigger_digit < 0 || c.trigger_digit > 9 || c.consecutive_count < 1 || c.consecutive_count > 50 ||
         (c.deviation_direction != 0 && c.deviation_direction != 1) || (c.win_behavior != 0 && c.win_behavior != 1)) return TC_ERR_INVALID_CONFIG;
     if (!(c.stake > 0) || !std::isfinite(c.stake) || c.take_profit < 0 || c.stop_loss < 0 || c.max_stake < 0 || c.max_daily_loss < 0) return TC_ERR_INVALID_STAKE;
