@@ -11,11 +11,16 @@ inline int64_t barrier_for(const TcConfig& c, int level) {
 inline int64_t direction_for(const TcConfig& c, int level) {
   return level == 0 ? c.direction : level == 1 ? c.recovery_direction1 : c.recovery_direction2;
 }
-// trigger = required consecutive run in the chosen direction AND current digit == trigger digit
+// Trigger = required consecutive run in the chosen direction AND the final-deviation condition of the active mode:
+//   mode 0 (Trigger Digit):      current digit == trigger digit            (original behaviour, unchanged)
+//   mode 1 (Deviation Trigger):  signed deviation == configured deviation  (exact: compared as doubled integer cur-prev,
+//                                                                           so +1.5 and -1.5 differ and nothing is rounded)
 inline bool qualified(const TcConfig& c, const RollingWindow& w) {
   if (!w.has_dev) return false;
   int run = c.deviation_direction == 0 ? w.consec_pos : w.consec_neg;
-  return run >= c.consecutive_count && w.cur == c.trigger_digit;
+  if (run < c.consecutive_count) return false;
+  if (c.trigger_mode == 1) return (int64_t)(w.cur - w.prev) == c.trigger_dev2;
+  return w.cur == c.trigger_digit;
 }
 inline double round2(double v) { return std::round(v * 100.0) / 100.0; }
 inline double stake_for(const TcConfig& c, int mlevel) {

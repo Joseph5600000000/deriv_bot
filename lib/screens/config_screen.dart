@@ -21,10 +21,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   TextEditingController _ctl(String k, num v) => _t.putIfAbsent(k, () => TextEditingController(text: '$v'));
 
-  Widget _field(String label, String k, num v, {bool decimal = false}) => Padding(
+  Widget _field(String label, String k, num v, {bool decimal = false, bool signed = false}) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: TextField(
-          controller: _ctl(k, v), keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+          controller: _ctl(k, v), keyboardType: TextInputType.numberWithOptions(decimal: decimal || signed, signed: signed),
           style: kMono.copyWith(color: Pal.onDeep), decoration: fieldDecoration(label),
         ),
       );
@@ -49,13 +49,24 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   String? _collect() {
     final v = <String, Object?>{
-      'barrier': _i('initialBarrier'), 'rb1': _i('recoveryBarrier1'), 'rb2': _i('recoveryBarrier2'), 'trig': _i('triggerDigit'),
+      'barrier': _i('initialBarrier'), 'rb1': _i('recoveryBarrier1'), 'rb2': _i('recoveryBarrier2'),
       'consec': _i('consecutiveCount'), 'stake': _d('stake'), 'tp': _d('takeProfit'), 'sl': _d('stopLoss'), 'mult': _d('multiplier'),
       'steps': _i('martingaleMaxSteps'), 'maxStake': _d('maxStake'), 'maxDaily': _d('maxDailyLoss'), 'maxLoss': _i('maxConsecutiveLosses'),
     };
     if (v.values.any((e) => e == null)) return 'Every field needs a valid number.';
     c.initialBarrier = v['barrier'] as int; c.recoveryBarrier1 = v['rb1'] as int; c.recoveryBarrier2 = v['rb2'] as int;
-    c.triggerDigit = v['trig'] as int; c.consecutiveCount = v['consec'] as int; c.stake = v['stake'] as double;
+    if (c.triggerMode == 0) {
+      final t = _i('triggerDigit');
+      if (t == null) return 'Trigger digit needs a number from 0 to 9.';
+      c.triggerDigit = t;
+    } else {
+      final dv = _d('triggerDeviation');
+      if (dv == null) return 'Deviation trigger needs a number such as +0.5 or -1.5.';
+      final problem = c.deviationProblem(dv);
+      if (problem != null) return problem;
+      c.triggerDeviation = dv;
+    }
+    c.consecutiveCount = v['consec'] as int; c.stake = v['stake'] as double;
     c.takeProfit = v['tp'] as double; c.stopLoss = v['sl'] as double; c.multiplier = v['mult'] as double;
     c.martingaleMaxSteps = v['steps'] as int; c.maxStake = v['maxStake'] as double; c.maxDailyLoss = v['maxDaily'] as double;
     c.maxConsecutiveLosses = v['maxLoss'] as int;
@@ -90,11 +101,15 @@ class _ConfigScreenState extends State<ConfigScreen> {
         }
         return ListView(padding: const EdgeInsets.only(bottom: 24), children: [
           const ScreenTitle('Strategy', sub: 'Saved settings are enforced by the trading engine'),
-          Panel(title: 'TRIGGER', child: Column(children: [
+          Panel(title: 'TRIGGER (one mode active at a time)', child: Column(children: [
             _seg('Initial direction', const ['OVER', 'UNDER'], c.direction, (i) => c.direction = i),
             _seg('Deviation', const ['POSITIVE', 'NEGATIVE'], c.deviationDirection, (i) => c.deviationDirection = i),
             _field('Consecutive deviations', 'consecutiveCount', c.consecutiveCount),
-            _field('Trigger digit (0-9)', 'triggerDigit', c.triggerDigit),
+            _seg('Trigger mode', const ['TRIGGER DIGIT', 'DEVIATION'], c.triggerMode, (i) => c.triggerMode = i),
+            if (c.triggerMode == 0)
+              _field('Trigger digit (0-9)', 'triggerDigit', c.triggerDigit)
+            else
+              _field('Deviation trigger (e.g. +0.5 or -1.5, sign must match direction)', 'triggerDeviation', c.triggerDeviation, signed: true),
             _field('Initial barrier (OVER 0-8 / UNDER 1-9)', 'initialBarrier', c.initialBarrier),
           ])),
           Panel(title: 'GLOBAL FILTER', child: _switch(

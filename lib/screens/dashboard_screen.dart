@@ -199,7 +199,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Row(children: [
           Expanded(child: Lcd('DIRECTION', s.signal_direction == 0 ? 'OVER' : 'UNDER', color: Pal.lime)), const SizedBox(width: 8),
           Expanded(child: Lcd('BARRIER', s.signal_barrier < 0 ? '-' : '${s.signal_barrier}', color: Pal.lime)), const SizedBox(width: 8),
-          Expanded(child: Lcd('TRIGGER DIGIT', '${a.cfg.triggerDigit}', size: 16)),
+          Expanded(child: a.cfg.triggerMode == 0
+              ? Lcd('TRIGGER DIGIT', '${a.cfg.triggerDigit}', size: 16)
+              : Lcd('TRIGGER DEV', '${a.cfg.triggerDeviation >= 0 ? '+' : ''}${a.cfg.triggerDeviation.toStringAsFixed(1)}', size: 16, color: _signColor(a.cfg.triggerDeviation >= 0 ? 1 : -1))),
         ]),
         const SizedBox(height: 8),
         Row(children: [

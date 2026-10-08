@@ -61,3 +61,9 @@ If any step fights you, use Path B.
 - Each barrier is validated against its own direction (OVER 0-8, UNDER 1-9). Stake, martingale, loss handling, reset unchanged.
 - Settings saved by older versions load with both recovery directions = the old initial direction, so behaviour is identical until you change them.
 - Saved engine state from earlier versions is ignored once (snapshot format v3): recovery level starts at NORMAL.
+
+## Upgrade notes (v5 - flexible trigger mode)
+- Strategy tab > TRIGGER: Trigger Digit (original) or Deviation. Only one is active.
+- Deviation mode: final deviation must equal the configured signed value EXACTLY (compared inside the engine as the whole-number difference current-previous, no rounding). Steps of 0.5, range +-0.5 to +-4.5. Sign must match the Positive/Negative direction.
+- Saved settings from older versions load in Trigger Digit mode, unchanged.
+- Engine state from earlier versions is ignored once (snapshot format v4).

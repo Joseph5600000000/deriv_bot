@@ -195,9 +195,42 @@ static void test_recovery_directions() {
   engine_configure(m.h, &c); m.ready(); engine_command(m.h, TC_CMD_START);
   m.feed({0,7,8}); NEAR(m.r.stake, 1.0); lose(m); m.feed({0,7,8}); NEAR(m.r.stake, 2.0); lose(m); m.feed({0,7,8}); NEAR(m.r.stake, 4.0); CHECK(m.r.direction == 1);
 }
-static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 21 * 8 && s[1] == (38 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
+
+static void test_trigger_modes() {
+  auto mk = [](T& t, int mode, int dir, int dev2, int digit, int count) { TcConfig c = t.cfg(); c.trigger_mode = mode; c.deviation_direction = dir;
+    c.trigger_dev2 = dev2; c.trigger_digit = digit; c.consecutive_count = count; int e = engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START); return e; };
+  // spec: count 2, Positive, trigger digit 3  (digits 0,2,3 => +1.0, +0.5, final digit 3)
+  { T t; CHECK(mk(t, 0, 0, 0, 3, 2) == 0); t.feed({0, 2, 3}); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  { T t; CHECK(mk(t, 0, 0, 0, 3, 2) == 0); t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_NONE); }           // wrong final digit, digit mode unchanged
+  // spec: count 2, Positive, deviation trigger +0.5 (+3.5 -> +0.5 = digits 0,7,8)
+  { T t; CHECK(mk(t, 1, 0, 1, 3, 2) == 0); t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE); }       // trigger digit (3) is ignored in deviation mode
+  { T t; CHECK(mk(t, 1, 0, 4, 3, 2) == 0); t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_NONE); }           // needs +2.0, final was +0.5
+  { T t; CHECK(mk(t, 1, 0, 4, 3, 2) == 0); t.feed({0, 3, 7}); CHECK(t.r.action == TC_ACT_EXECUTE); }       // +1.5 then +2.0
+  // spec: count 2, Negative, deviation trigger -1.5 (-2.5 -> -1.5 = digits 9,4,1)
+  { T t; CHECK(mk(t, 1, 1, -3, 3, 2) == 0); t.feed({9, 4, 1}); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  { T t; CHECK(mk(t, 1, 1, -5, 3, 2) == 0); t.feed({9, 4, 1}); CHECK(t.r.action == TC_ACT_NONE); }         // -2.5 required, got -1.5
+  // sign matters: +1.5 is not -1.5
+  { T t; CHECK(mk(t, 1, 0, 3, 3, 2) == 0); t.feed({0, 2, 5}); CHECK(t.r.action == TC_ACT_EXECUTE); }       // +1.0 then +1.5 matches +1.5
+  { T t; CHECK(mk(t, 1, 1, -3, 3, 2) == 0); t.feed({0, 2, 5}); CHECK(t.r.action == TC_ACT_NONE); }         // same digits do not satisfy -1.5
+  // consecutive requirement still applies: -3.5 then +0.5 (run of 1 positive) does not qualify
+  { T t; CHECK(mk(t, 1, 0, 1, 3, 2) == 0); t.feed({9, 2, 3}); CHECK(t.r.action == TC_ACT_NONE); }
+  // exactness: a run longer than required still qualifies on the exact final value
+  { T t; CHECK(mk(t, 1, 0, 1, 3, 2) == 0); t.feed({0, 3, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  // switching back to Trigger Digit restores the original behaviour exactly
+  { T t; CHECK(mk(t, 1, 0, 1, 3, 2) == 0); TcConfig c = t.cfg(); c.trigger_mode = 0; c.trigger_digit = 8; c.consecutive_count = 2; CHECK(engine_configure(t.h, &c) == 0);
+    t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  // validation
+  { T t; TcConfig c = t.cfg(); c.trigger_mode = 1; c.deviation_direction = 0; c.trigger_dev2 = -3; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG);   // negative trigger with a positive run
+    c.deviation_direction = 1; c.trigger_dev2 = 3; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG);
+    c.trigger_dev2 = 0; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG);
+    c.deviation_direction = 0; c.trigger_dev2 = 10; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG);
+    c.trigger_mode = 2; c.trigger_dev2 = 1; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG); }
+  // record keeps the actual final digit in deviation mode; loss filter / recovery still operate
+  { T t; CHECK(mk(t, 1, 0, 1, 3, 2) == 0); t.feed({0, 7, 8}); lose(t); TcRecord r; CHECK(engine_get_last_record(t.h, &r) == 1 && r.trigger_digit == 8 && t.st().recovery_level == 1); }
+}
+static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 23 * 8 && s[1] == (38 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
   test_math(); test_sequences(); test_trigger(); test_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_abi();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

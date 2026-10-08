@@ -125,7 +125,7 @@ class Engine {
     r.trade_id = ++p_.trade_seq; r.tick_epoch = epoch; r.market = p_.cfg.market; r.account_real = p_.account_real;
     r.prev_digit = p_.w.prev; r.cur_digit = p_.w.cur; r.deviation_sign = p_.w.sign;
     r.consecutive_seq = p_.cfg.deviation_direction == 0 ? p_.w.consec_pos : p_.w.consec_neg;
-    r.trigger_digit = p_.cfg.trigger_digit; r.direction = dir; r.barrier = barrier;
+    r.trigger_digit = p_.cfg.trigger_mode == 1 ? p_.w.cur : p_.cfg.trigger_digit; r.direction = dir; r.barrier = barrier;
     r.recovery_level = p_.recovery; r.martingale_level = p_.mlevel; r.average = p_.w.average;
     r.deviation = p_.w.deviation; r.stake = stake; r.t_tick_rx_us = rx_us; r.t_digit_us = out->t_digit_us;
     r.t_trigger_us = now_us();
@@ -256,6 +256,11 @@ class Engine {
         (c.deviation_direction != 0 && c.deviation_direction != 1) || (c.win_behavior != 0 && c.win_behavior != 1)) return TC_ERR_INVALID_CONFIG;
     if (!(c.stake > 0) || !std::isfinite(c.stake) || c.take_profit < 0 || c.stop_loss < 0 || c.max_stake < 0 || c.max_daily_loss < 0) return TC_ERR_INVALID_STAKE;
     if (c.martingale_enabled && (!(c.martingale_multiplier >= 1.0) || c.martingale_max_steps < 0 || c.martingale_max_steps > 20)) return TC_ERR_INVALID_CONFIG;
+    if (c.trigger_mode != 0 && c.trigger_mode != 1) return TC_ERR_INVALID_CONFIG;
+    if (c.trigger_mode == 1) {   // doubled deviation: +-0.5 steps up to +-4.5; its sign must match the required run, 0 can never be in a run
+      if (c.trigger_dev2 == 0 || c.trigger_dev2 < -9 || c.trigger_dev2 > 9) return TC_ERR_INVALID_CONFIG;
+      if ((c.deviation_direction == 0) != (c.trigger_dev2 > 0)) return TC_ERR_INVALID_CONFIG;
+    }
     if (c.max_consecutive_losses < 0) return TC_ERR_INVALID_CONFIG;
     return 0;
   }
