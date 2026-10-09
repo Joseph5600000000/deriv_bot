@@ -48,7 +48,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             initiallyExpanded: open, maintainState: true, iconColor: Pal.lime, collapsedIconColor: Pal.onDeepDim,
-            tilePadding: const EdgeInsets.fromLTRB(16, 4, 10, 4), childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            tilePadding: const EdgeInsets.fromLTRB(16, 4, 10, 4), childrenPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             title: Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

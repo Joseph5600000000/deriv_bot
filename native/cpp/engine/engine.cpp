@@ -291,12 +291,12 @@ class Engine {
     p_.total_trades++; p_.stats_pnl += profit; p_.session_pnl += profit; p_.daily_pnl += profit; p_.last_profit = profit;
     p_.rec.profit = profit; p_.rec.result = win ? TC_RES_WIN : TC_RES_LOSS; p_.last_result = p_.rec.result;
     if (win) {
-      p_.wins++; p_.consec_losses = 0; p_.mlevel = 0;
+      p_.wins++; p_.consec_losses = 0;
       if (p_.unrecovered > 0) {                       // cumulative recovery: actual settled profit pays down the balance
         p_.unrecovered = round2(p_.unrecovered - profit);
-        if (p_.unrecovered <= 0.004) { p_.unrecovered = 0; p_.recovery = 0; }   // fully recovered -> Initial barrier
+        if (p_.unrecovered <= 0.004) { p_.unrecovered = 0; p_.recovery = 0; p_.mlevel = 0; }   // stake resets only when recovery is complete   // fully recovered -> Initial barrier
         else p_.recovery = 2;                                                    // partial recovery -> Recovery 2 until cleared
-      } else p_.recovery = 0;
+      } else { p_.recovery = 0; p_.mlevel = 0; }
     } else {
       p_.losses++; p_.consec_losses++;
       if (p_.cfg.martingale_enabled) p_.mlevel++;

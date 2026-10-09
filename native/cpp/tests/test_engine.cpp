@@ -351,9 +351,24 @@ static void test_recovery_switching() {
   t.feed({0,7,8}); CHECK(t.st().trade_owner == 0 && t.r.barrier == 8); win(t, 1.5);             // S1 trades on R2 and completes recovery
   CHECK(t.st().recovery_level == 0 && t.st().unrecovered == 0);
 }
+static void test_martingale_persistence() {
+  T t; s2setup(t, true); TcConfig c = t.cfg(); c.s2_dev1 = 4; c.s2_dev2 = -3; c.s2_dev3 = 1; c.stake = 5; c.martingale_enabled = 1; c.martingale_multiplier = 2;
+  c.martingale_max_steps = 6; c.max_stake = 1000; c.max_daily_loss = 0; CHECK(engine_configure(t.h, &c) == 0);
+  t.feed({0,7,8}); CHECK(t.r.stake == 5); lose(t, -5);                                           // Initial loss
+  t.feed({0,7,8}); CHECK(t.r.stake == 10 && t.r.barrier == 6); lose(t, -10);                      // R1 loss
+  t.feed({0,7,8}); CHECK(t.r.stake == 20 && t.r.barrier == 8); lose(t, -20);                      // R2
+  t.feed({0,7,8}); CHECK(t.r.stake == 40); win(t, 10);                                            // partial win: owed 25 left -> stake NOT reset
+  CHECK(t.st().recovery_level == 2 && t.st().martingale_level == 3 && t.st().unrecovered == 25.0);
+  engine_command(t.h, TC_CMD_S1_OFF); fire(t, 0); CHECK(t.r.action == TC_ACT_EXECUTE && t.r.stake == 40 && t.r.barrier == 8); lose(t, -40);   // switch to S2, stake kept
+  CHECK(t.st().martingale_level == 4 && t.st().unrecovered == 65.0);
+  engine_command(t.h, TC_CMD_S1_ON); engine_command(t.h, TC_CMD_S2_OFF);
+  t.feed({0,7,8}); CHECK(t.r.stake == 80); win(t, 70);                                            // recovered (+5 net) -> reset
+  CHECK(t.st().recovery_level == 0 && t.st().martingale_level == 0 && t.st().unrecovered == 0);
+  t.feed({0,7,8}); CHECK(t.r.stake == 5 && t.r.barrier == 4);
+}
 static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 26 * 8 && s[1] == (46 + 16 + 9) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
   test_math(); test_sequences(); test_trigger(); test_recovery(); test_cumulative_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_recovery_switching(); test_abi();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_recovery_switching(); test_martingale_persistence(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

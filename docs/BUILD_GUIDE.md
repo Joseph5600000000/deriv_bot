@@ -80,3 +80,7 @@ If any step fights you, use Path B.
 - Both strategies already share the global Initial / Recovery 1 / Recovery 2 barriers; recovery state is one engine-wide value, so switching strategies never resets it.
 - Recovery now follows the total unrecovered loss (actual settled P/L): Initial loss -> R1; R1 loss or partial win -> R2; R2 holds until the balance is cleared; then back to Initial.
 - The old "After a win RESET/STEP DOWN" setting is superseded and ignored. Snapshot format v6 (old saved state is ignored once).
+
+## Upgrade notes (v8 - persistent martingale stake during recovery)
+- With Martingale on, the stake progression is kept for the whole recovery cycle (any strategy, any recovery barrier) until the unrecovered loss is fully cleared; only then does the stake return to the configured initial stake.
+- Fixed the clipped "Deviation 1" field title inside the collapsible strategy cards (extra top padding).

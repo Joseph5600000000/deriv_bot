@@ -1,7 +1,7 @@
 name: deriv_bot
 description: DeltaDesk - Over/Under digit trading desk for Deriv. Flutter UI, C++ trading core via FFI.
 publish_to: "none"
-version: 1.6.0+7
+version: 1.6.1+8
 environment:
   sdk: ">=3.3.0 <4.0.0"
 dependencies:
