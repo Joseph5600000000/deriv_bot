@@ -189,7 +189,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
             _field('Recovery barrier 1 (OVER 0-8 / UNDER 1-9)', 'recoveryBarrier1', c.recoveryBarrier1),
             _seg('Recovery 2 direction', const ['OVER', 'UNDER'], c.recoveryDirection2, (i) => c.recoveryDirection2 = i),
             _field('Recovery barrier 2 (OVER 0-8 / UNDER 1-9)', 'recoveryBarrier2', c.recoveryBarrier2),
-            _seg('After a win', const ['RESET', 'STEP DOWN'], c.winBehavior, (i) => c.winBehavior = i),
+            const Padding(padding: EdgeInsets.only(top: 6), child: Text(
+              'Shared by Strategy 1 and 2. Recovery follows your total unrecovered loss: Initial loss → R1, R1 loss or partial win → R2, '
+              'R2 stays until all losses are recovered, then back to Initial.', style: TextStyle(fontSize: 11))),
           ])),
           Panel(title: 'STAKE & MARTINGALE', child: Column(children: [
             _field('Stake (account currency)', 'stake', c.stake, decimal: true),

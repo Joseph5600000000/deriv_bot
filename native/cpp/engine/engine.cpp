@@ -19,7 +19,7 @@ struct Persist {                       // everything that must survive a restart
   int64_t s2_last_applied, s2_wins, s2_losses;      // Strategy 2 independent state
   int32_t s1_on, s2_on, s2_idx, s2_started, trade_owner /*0 S1, 1 S2, -1 none*/, s2_trade_idx;
   int64_t last_epoch, trade_seq, total_trades, open_contract, record_seq, day_index, recent[16], filter_rejects;
-  double balance, session_pnl, daily_pnl, last_profit, stats_pnl;
+  double unrecovered /*accumulated unrecovered loss, >=0*/, balance, session_pnl, daily_pnl, last_profit, stats_pnl;
   int32_t has_cfg, bot, fsm, recovery, mlevel, wins, losses, consec_losses, last_result, last_error,
           needs_reconcile, emergency, account_real, sig_dir, sig_barrier, trig_status, recent_count, balance_known, has_restrict, restrict_dev2;
   char account_id[32]; char currency[16];
@@ -57,7 +57,7 @@ class Engine {
       case TC_CMD_RESET_ANALYSIS: p_.w.reset(); p_.recent_count = 0; p_.trig_status = 0; break;
       case TC_CMD_RESET_STRATEGY:
         if (p_.fsm == TC_FSM_EXECUTING || p_.fsm == TC_FSM_OPEN) return TC_ERR_BUSY;
-        p_.recovery = 0; p_.mlevel = 0; p_.consec_losses = 0; p_.session_pnl = 0; p_.has_restrict = 0; break;
+        p_.recovery = 0; p_.unrecovered = 0; p_.mlevel = 0; p_.consec_losses = 0; p_.session_pnl = 0; p_.has_restrict = 0; break;
       case TC_CMD_S1_ON: p_.s1_on = 1; break;
       case TC_CMD_S1_OFF: p_.s1_on = 0; break;                         // never touches an open trade
       case TC_CMD_S2_ON: if (!p_.s2_started) { p_.s2_idx = 0; p_.s2_started = 1; } p_.s2_on = 1; break;   // first activation starts at Deviation 1; later ones RESUME
@@ -218,7 +218,7 @@ class Engine {
     s->loss_filter_on = p_.has_cfg ? p_.cfg.loss_dev_filter : 0; s->restricted_dev2 = p_.has_restrict ? p_.restrict_dev2 : 99;
     s->s1_on = p_.s1_on; s->s2_on = p_.s2_on; s->s2_idx = p_.s2_idx; s->s2_wins = p_.s2_wins; s->s2_losses = p_.s2_losses;
     s->trade_owner = p_.trade_owner; s->s2_started = p_.s2_started; s->s2_pending = (p_.trade_owner == 1 && (p_.fsm == TC_FSM_EXECUTING || p_.fsm == TC_FSM_OPEN)) ? 1 : 0;
-    s->filter_rejects = p_.filter_rejects; s->stats_pnl = p_.stats_pnl;
+    s->filter_rejects = p_.filter_rejects; s->stats_pnl = p_.stats_pnl; s->unrecovered = p_.unrecovered;
     for (int i = 0; i < 16; i++) s->recent[i] = p_.recent[i];
     s->average = p_.w.average; s->deviation = p_.w.deviation;
     s->current_stake = p_.has_cfg ? stake_for(p_.cfg, p_.mlevel) : 0;
@@ -292,11 +292,17 @@ class Engine {
     p_.rec.profit = profit; p_.rec.result = win ? TC_RES_WIN : TC_RES_LOSS; p_.last_result = p_.rec.result;
     if (win) {
       p_.wins++; p_.consec_losses = 0; p_.mlevel = 0;
-      p_.recovery = p_.cfg.win_behavior == 0 ? 0 : (p_.recovery > 0 ? p_.recovery - 1 : 0);   // explicit, configurable
+      if (p_.unrecovered > 0) {                       // cumulative recovery: actual settled profit pays down the balance
+        p_.unrecovered = round2(p_.unrecovered - profit);
+        if (p_.unrecovered <= 0.004) { p_.unrecovered = 0; p_.recovery = 0; }   // fully recovered -> Initial barrier
+        else p_.recovery = 2;                                                    // partial recovery -> Recovery 2 until cleared
+      } else p_.recovery = 0;
     } else {
       p_.losses++; p_.consec_losses++;
       if (p_.cfg.martingale_enabled) p_.mlevel++;
-      if (p_.recovery < 2) p_.recovery++;                                                    // RECOVERY_2 holds on further losses
+      p_.unrecovered = round2(p_.unrecovered + (profit < 0 ? -profit : p_.rec.stake));   // actual loss (stake if profit not reported)
+      if (p_.unrecovered <= 0.004) p_.unrecovered = p_.rec.stake;
+      p_.recovery = p_.recovery == 0 ? 1 : 2;                                                // Initial->R1, R1->R2, R2 holds
     }
     if (p_.trade_owner == 1 && p_.s2_last_applied != p_.rec.trade_id) {          // Strategy 2 transition table, applied once per confirmed result
       p_.s2_last_applied = p_.rec.trade_id;

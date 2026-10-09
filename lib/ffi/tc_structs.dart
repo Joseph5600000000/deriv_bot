@@ -100,6 +100,7 @@ final class TcState extends Struct {
   @Double() external double daily_pnl;
   @Double() external double last_profit;
   @Double() external double stats_pnl;
+  @Double() external double unrecovered;
 }
 
 final class TcRecord extends Struct {

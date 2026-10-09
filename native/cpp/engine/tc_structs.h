@@ -100,6 +100,7 @@ typedef struct TcState {
   double daily_pnl;
   double last_profit;
   double stats_pnl;
+  double unrecovered;
 } TcState;
 typedef struct TcRecord {
   int64_t trade_id;

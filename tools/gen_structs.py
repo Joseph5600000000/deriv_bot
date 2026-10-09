@@ -16,7 +16,7 @@ S = {
    "last_result","last_error","open_contract_id","last_trade_id","needs_reconcile","emergency_latched",
    "recent_count","record_seq","last_tick_epoch","lat_tick_to_trigger_us","lat_trigger_to_send_us",
    "lat_send_to_ack_us","lat_ack_to_open_us","lat_total_us","loss_filter_on","restricted_dev2","filter_rejects","s1_on","s2_on","s2_idx","s2_wins","s2_losses","trade_owner","s2_started","s2_pending"],
-  ["average","deviation","current_stake","balance","session_pnl","daily_pnl","last_profit","stats_pnl"], [("recent",16)]),
+  ["average","deviation","current_stake","balance","session_pnl","daily_pnl","last_profit","stats_pnl","unrecovered"], [("recent",16)]),
  "TcRecord": (["trade_id","tick_epoch","market","account_real","prev_digit","cur_digit","deviation_sign",
    "consecutive_seq","trigger_digit","direction","barrier","recovery_level","martingale_level","result",
    "contract_id","t_tick_rx_us","t_digit_us","t_trigger_us","t_request_us","t_ack_us","t_open_us"],

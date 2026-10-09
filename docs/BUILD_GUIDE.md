@@ -75,3 +75,8 @@ If any step fights you, use Path B.
 - Shared with Strategy 1: market, direction/barrier by recovery level, stake, martingale, recovery, risk limits, loss-deviation filter, bot START/PAUSE/STOP.
 - First time S2 is switched ON it starts at Deviation 1; switching OFF/ON later RESUMES. "Start new cycle" is the only way back to D1.
 - Rejected buys and unconfirmed/unreconciled trades never move the cycle. Engine state from earlier versions is ignored once (snapshot v5).
+
+## Upgrade notes (v7 - shared barriers & cumulative loss recovery)
+- Both strategies already share the global Initial / Recovery 1 / Recovery 2 barriers; recovery state is one engine-wide value, so switching strategies never resets it.
+- Recovery now follows the total unrecovered loss (actual settled P/L): Initial loss -> R1; R1 loss or partial win -> R2; R2 holds until the balance is cleared; then back to Initial.
+- The old "After a win RESET/STEP DOWN" setting is superseded and ignored. Snapshot format v6 (old saved state is ignored once).

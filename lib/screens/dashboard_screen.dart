@@ -240,7 +240,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: Lcd('RECOVERY', const ['NORMAL', 'RECOVERY_1', 'RECOVERY_2'][s.recovery_level], size: 12)), const SizedBox(width: 8),
+          Expanded(child: Lcd('RECOVERY', const ['NORMAL', 'RECOVERY_1', 'RECOVERY_2'][s.recovery_level], size: 12, sub: s.unrecovered > 0 ? 'owed ${s.unrecovered.toStringAsFixed(2)}' : null)), const SizedBox(width: 8),
           Expanded(child: Lcd('MARTINGALE', 'L${s.martingale_level}', size: 14)), const SizedBox(width: 8),
           Expanded(child: Lcd('W / L', '${s.wins}/${s.losses}', size: 14)),
         ]),

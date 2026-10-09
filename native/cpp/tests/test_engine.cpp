@@ -58,9 +58,31 @@ static void test_recovery() {
   t.feed({0, 7, 8}); CHECK(t.r.barrier == 4); lose(t); CHECK(t.st().recovery_level == 1);
   t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE && t.r.barrier == 6); lose(t); CHECK(t.st().recovery_level == 2);
   t.feed({0, 7, 8}); CHECK(t.r.barrier == 8); lose(t); CHECK(t.st().recovery_level == 2);     // holds at RECOVERY_2
-  t.feed({0, 7, 8}); CHECK(t.r.barrier == 8); win(t); CHECK(t.st().recovery_level == 0);      // win_behavior 0: reset
-  T u; c.win_behavior = 1; engine_configure(u.h, &c); u.ready(); engine_command(u.h, TC_CMD_START);
-  u.feed({0,7,8}); lose(u); u.feed({0,7,8}); lose(u); u.feed({0,7,8}); win(u); CHECK(u.st().recovery_level == 1);   // step-down mode
+  CHECK(t.st().unrecovered > 2.99 && t.st().unrecovered < 3.01);
+  t.feed({0, 7, 8}); CHECK(t.r.barrier == 8); win(t); CHECK(t.st().recovery_level == 2);      // +0.95 does not clear $3: stay R2
+  t.feed({0, 7, 8}); CHECK(t.r.barrier == 8); win(t, 5); CHECK(t.st().recovery_level == 0 && t.st().unrecovered == 0);   // fully recovered
+}
+// Cumulative recovery: shared barriers, actual settled P/L, worked example from the spec
+static void test_cumulative_recovery() {
+  { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);
+    t.feed({0,7,8}); CHECK(t.r.barrier == 4); lose(t, -2);  CHECK(t.st().recovery_level == 1 && t.st().unrecovered == 2.0);
+    t.feed({0,7,8}); CHECK(t.r.barrier == 6); win(t, 1);    CHECK(t.st().recovery_level == 2 && t.st().unrecovered == 1.0);   // partial -> R2
+    t.feed({0,7,8}); CHECK(t.r.barrier == 8); lose(t, -1);  CHECK(t.st().recovery_level == 2 && t.st().unrecovered == 2.0);
+    t.feed({0,7,8}); CHECK(t.r.barrier == 8); win(t, 2.5);  CHECK(t.st().recovery_level == 0 && t.st().unrecovered == 0);     // recovered +0.50 net
+    t.feed({0,7,8}); CHECK(t.r.barrier == 4); }
+  { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);       // R1 win that fully recovers returns to Initial
+    t.feed({0,7,8}); lose(t, -1); t.feed({0,7,8}); CHECK(t.r.barrier == 6); win(t, 1.0);
+    CHECK(t.st().recovery_level == 0 && t.st().unrecovered == 0); t.feed({0,7,8}); CHECK(t.r.barrier == 4); }
+  { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);       // initial win never touches recovery
+    t.feed({0,7,8}); win(t, 0.9); CHECK(t.st().recovery_level == 0 && t.st().unrecovered == 0); }
+  { T t; TcConfig c = t.cfg(); c.win_behavior = 1; engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);   // legacy setting is ignored
+    t.feed({0,7,8}); lose(t, -2); t.feed({0,7,8}); lose(t, -2); t.feed({0,7,8}); win(t, 1); CHECK(t.st().recovery_level == 2); }
+  { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);       // duplicate settlement is not double counted
+    t.feed({0,7,8}); lose(t, -2); engine_on_contract_update(t.h, 777, 2, -2, engine_now_us()); CHECK(t.st().unrecovered == 2.0 && t.st().recovery_level == 1);
+    std::vector<uint8_t> b(8192); int n = engine_serialize(t.h, b.data(), (int)b.size());                    // persists across restart
+    T r; CHECK(engine_restore(r.h, b.data(), n, 1) == 0); CHECK(r.st().unrecovered == 2.0 && r.st().recovery_level == 1); }
+  { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START);       // reset-strategy clears it
+    t.feed({0,7,8}); lose(t, -2); engine_command(t.h, TC_CMD_RESET_STRATEGY); CHECK(t.st().unrecovered == 0 && t.st().recovery_level == 0); }
 }
 static void test_risk_martingale() {
   T t; TcConfig c = t.cfg(); c.martingale_enabled = 1; c.martingale_multiplier = 2; c.martingale_max_steps = 2; c.max_stake = 100;
@@ -178,7 +200,7 @@ static void test_recovery_directions() {
   CHECK(t.st().signal_direction == 1 && t.st().signal_barrier == 7);
   t.feed({0,7,8}); CHECK(t.r.direction == 1 && t.r.barrier == 7 && strstr(t.pl, "DIGITUNDER") && strstr(t.pl, "\"barrier\":\"7\"")); lose(t);
   t.feed({0,7,8}); CHECK(t.r.direction == 1 && t.r.barrier == 7);                              // stays on RECOVERY_2 after another loss
-  win(t); CHECK(t.st().recovery_level == 0);                                                    // reset unchanged
+  win(t, 10); CHECK(t.st().recovery_level == 0);                                               // fully recovered -> Initial
   t.feed({0,7,8}); CHECK(t.r.direction == 0 && t.r.barrier == 4);                              // back to the initial trade
   // initial direction is independent: initial UNDER 3, R1 OVER 5, R2 UNDER 7
   T u; c = u.cfg(); c.direction = 1; c.initial_barrier = 3; c.recovery_direction1 = 0; c.recovery_barrier1 = 5; c.recovery_direction2 = 1; c.recovery_barrier2 = 7;
@@ -316,9 +338,22 @@ static void test_strategy2() {
   { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START); CHECK(t.st().s1_on == 1 && t.st().s2_on == 0);
     t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE && t.st().trade_owner == 0); win(t); CHECK(t.st().s2_idx == 0 && t.st().s2_wins == 0); }
 }
-static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 26 * 8 && s[1] == (46 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
+static void test_recovery_switching() {
+  T t; s2setup(t, true);                                              // both strategies enabled; barriers are global
+  t.feed({0,7,8}); CHECK(t.st().trade_owner == 0 && t.r.barrier == 4); lose(t, -2);            // S1 loses on Initial
+  CHECK(t.st().recovery_level == 1 && t.st().unrecovered == 2.0);
+  engine_command(t.h, TC_CMD_S1_OFF);                                 // switch to S2 only: nothing resets
+  CHECK(t.st().recovery_level == 1 && t.st().unrecovered == 2.0);
+  fire(t, 0); CHECK(t.r.action == TC_ACT_EXECUTE && t.st().trade_owner == 1 && t.r.barrier == 6); win(t, 1);   // S2 trades on R1 barrier
+  CHECK(t.st().recovery_level == 2 && t.st().unrecovered == 1.0);
+  engine_command(t.h, TC_CMD_S1_ON); engine_command(t.h, TC_CMD_S2_OFF);                        // back to S1
+  CHECK(t.st().recovery_level == 2 && t.st().unrecovered == 1.0);
+  t.feed({0,7,8}); CHECK(t.st().trade_owner == 0 && t.r.barrier == 8); win(t, 1.5);             // S1 trades on R2 and completes recovery
+  CHECK(t.st().recovery_level == 0 && t.st().unrecovered == 0);
+}
+static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 26 * 8 && s[1] == (46 + 16 + 9) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
-  test_math(); test_sequences(); test_trigger(); test_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_abi();
+  test_math(); test_sequences(); test_trigger(); test_recovery(); test_cumulative_recovery(); test_risk_martingale();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_recovery_switching(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }
