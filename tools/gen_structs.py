@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 S = {
  "TcConfig": (["market","direction","initial_barrier","recovery_barrier1","recovery_barrier2","trigger_digit",
    "consecutive_count","deviation_direction","martingale_enabled","martingale_max_steps",
-   "max_consecutive_losses","win_behavior","loss_dev_filter","recovery_direction1","recovery_direction2","trigger_mode","trigger_dev2"],
+   "max_consecutive_losses","win_behavior","loss_dev_filter","recovery_direction1","recovery_direction2","trigger_mode","trigger_dev2","s2_dev1","s2_dev2","s2_dev3"],
   ["stake","take_profit","stop_loss","martingale_multiplier","max_stake","max_daily_loss"], []),
  "TcTickResult": (["action","error_code","trade_id","digit","direction","barrier","payload_len","t_digit_us","t_trigger_us"],
   ["stake"], []),
@@ -15,7 +15,7 @@ S = {
    "signal_barrier","recovery_level","martingale_level","wins","losses","total_trades","consec_losses",
    "last_result","last_error","open_contract_id","last_trade_id","needs_reconcile","emergency_latched",
    "recent_count","record_seq","last_tick_epoch","lat_tick_to_trigger_us","lat_trigger_to_send_us",
-   "lat_send_to_ack_us","lat_ack_to_open_us","lat_total_us","loss_filter_on","restricted_dev2","filter_rejects"],
+   "lat_send_to_ack_us","lat_ack_to_open_us","lat_total_us","loss_filter_on","restricted_dev2","filter_rejects","s1_on","s2_on","s2_idx","s2_wins","s2_losses","trade_owner","s2_started","s2_pending"],
   ["average","deviation","current_stake","balance","session_pnl","daily_pnl","last_profit","stats_pnl"], [("recent",16)]),
  "TcRecord": (["trade_id","tick_epoch","market","account_real","prev_digit","cur_digit","deviation_sign",
    "consecutive_seq","trigger_digit","direction","barrier","recovery_level","martingale_level","result",

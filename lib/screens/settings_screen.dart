@@ -60,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(width: 12),
             const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('DeltaDesk', style: TextStyle(color: Pal.onDeep, fontWeight: FontWeight.w800, fontSize: 16)),
-              Text('Version 1.4.0', style: TextStyle(color: Pal.onDeepDim, fontSize: 11)),
+              Text('Version 1.5.0', style: TextStyle(color: Pal.onDeepDim, fontSize: 11)),
             ])),
           ]),
         ),

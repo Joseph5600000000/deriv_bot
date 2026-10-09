@@ -16,6 +16,8 @@ static const char* kSymbols[5] = {"R_10", "R_25", "R_50", "R_75", "R_100"};
 
 struct Persist {                       // everything that must survive a restart (POD)
   TcConfig cfg; RollingWindow w; TcRecord rec; TcRecord last_done;
+  int64_t s2_last_applied, s2_wins, s2_losses;      // Strategy 2 independent state
+  int32_t s1_on, s2_on, s2_idx, s2_started, trade_owner /*0 S1, 1 S2, -1 none*/, s2_trade_idx;
   int64_t last_epoch, trade_seq, total_trades, open_contract, record_seq, day_index, recent[16], filter_rejects;
   double balance, session_pnl, daily_pnl, last_profit, stats_pnl;
   int32_t has_cfg, bot, fsm, recovery, mlevel, wins, losses, consec_losses, last_result, last_error,
@@ -25,7 +27,7 @@ struct Persist {                       // everything that must survive a restart
 
 class Engine {
  public:
-  Engine() { memset((void*)&p_, 0, sizeof p_); p_.last_epoch = -1; p_.w.reset(); p_.fsm = TC_FSM_IDLE; p_.sig_barrier = -1; }
+  Engine() { memset((void*)&p_, 0, sizeof p_); p_.last_epoch = -1; p_.w.reset(); p_.fsm = TC_FSM_IDLE; p_.sig_barrier = -1; p_.s1_on = 1; p_.trade_owner = -1; }
 
   int configure(const TcConfig* c) {
     std::lock_guard<std::mutex> g(mu_);
@@ -56,6 +58,13 @@ class Engine {
       case TC_CMD_RESET_STRATEGY:
         if (p_.fsm == TC_FSM_EXECUTING || p_.fsm == TC_FSM_OPEN) return TC_ERR_BUSY;
         p_.recovery = 0; p_.mlevel = 0; p_.consec_losses = 0; p_.session_pnl = 0; p_.has_restrict = 0; break;
+      case TC_CMD_S1_ON: p_.s1_on = 1; break;
+      case TC_CMD_S1_OFF: p_.s1_on = 0; break;                         // never touches an open trade
+      case TC_CMD_S2_ON: if (!p_.s2_started) { p_.s2_idx = 0; p_.s2_started = 1; } p_.s2_on = 1; break;   // first activation starts at Deviation 1; later ones RESUME
+      case TC_CMD_S2_OFF: p_.s2_on = 0; break;                         // cycle state kept; open S2 trade still settles normally
+      case TC_CMD_S2_NEW_CYCLE:
+        if ((p_.fsm == TC_FSM_EXECUTING || p_.fsm == TC_FSM_OPEN) && p_.trade_owner == 1) return TC_ERR_BUSY;
+        p_.s2_idx = 0; p_.s2_started = 1; break;
       case TC_CMD_CLEAR_HISTORY:       // statistics only: risk accumulators, recovery, config and live trade are untouched
         p_.wins = 0; p_.losses = 0; p_.total_trades = 0; p_.last_result = 0; p_.last_profit = 0; p_.stats_pnl = 0; break;
       default: return TC_ERR_UNKNOWN;
@@ -95,7 +104,10 @@ class Engine {
     p_.w.push(d); out->digit = d;
     if (p_.recent_count < 16) p_.recent[p_.recent_count++] = d;
     else { memmove(p_.recent, p_.recent + 1, 15 * sizeof(int64_t)); p_.recent[15] = d; }
-    bool q = p_.has_cfg && qualified(p_.cfg, p_.w);
+    bool q1 = p_.has_cfg && p_.s1_on && qualified(p_.cfg, p_.w);
+    bool q2 = p_.has_cfg && p_.s2_on && p_.w.has_dev && (int64_t)(p_.w.cur - p_.w.prev) == s2_dev_for(p_.cfg, p_.s2_idx);
+    bool q = q1 || q2;
+    int owner = q1 ? 0 : 1;                                    // one shared trade slot; Strategy 1 keeps priority on a tie
     p_.trig_status = q ? 1 : 0;
     p_.sig_dir = p_.has_cfg ? (int)direction_for(p_.cfg, p_.recovery) : 0;
     p_.sig_barrier = p_.has_cfg ? (int)barrier_for(p_.cfg, p_.recovery) : -1;
@@ -109,6 +121,7 @@ class Engine {
     int64_t barrier = barrier_for(p_.cfg, p_.recovery);
     int64_t dir = direction_for(p_.cfg, p_.recovery);          // Over/Under for THIS level only
     double stake = stake_for(p_.cfg, p_.mlevel);
+    p_.trade_owner = owner; p_.s2_trade_idx = p_.s2_idx;
     int err = 0;
     if (!barrier_ok((int)dir, barrier)) err = TC_ERR_INVALID_BARRIER;
     else if (pub_ != TC_CONN_READY || trd_ != TC_CONN_READY) err = TC_ERR_NOT_READY;
@@ -117,7 +130,7 @@ class Engine {
     else { RiskView r{p_.session_pnl, p_.daily_pnl, p_.balance, p_.balance_known, p_.consec_losses, p_.mlevel}; err = pre_trade(p_.cfg, r, stake); }
     if (!err && cap < 600) err = TC_ERR_UNKNOWN;
     if (err) {
-      p_.last_error = err; out->action = TC_ACT_BLOCKED; out->error_code = err; go(TC_FSM_MONITORING);
+      p_.trade_owner = -1; p_.last_error = err; out->action = TC_ACT_BLOCKED; out->error_code = err; go(TC_FSM_MONITORING);
       if (is_halting(err)) { p_.bot = TC_BOT_STOPPED; }
       sync_idle(); return;
     }
@@ -203,6 +216,8 @@ class Engine {
     s->emergency_latched = p_.emergency; s->recent_count = p_.recent_count; s->record_seq = p_.record_seq;
     s->last_tick_epoch = p_.last_epoch;
     s->loss_filter_on = p_.has_cfg ? p_.cfg.loss_dev_filter : 0; s->restricted_dev2 = p_.has_restrict ? p_.restrict_dev2 : 99;
+    s->s1_on = p_.s1_on; s->s2_on = p_.s2_on; s->s2_idx = p_.s2_idx; s->s2_wins = p_.s2_wins; s->s2_losses = p_.s2_losses;
+    s->trade_owner = p_.trade_owner; s->s2_started = p_.s2_started; s->s2_pending = (p_.trade_owner == 1 && (p_.fsm == TC_FSM_EXECUTING || p_.fsm == TC_FSM_OPEN)) ? 1 : 0;
     s->filter_rejects = p_.filter_rejects; s->stats_pnl = p_.stats_pnl;
     for (int i = 0; i < 16; i++) s->recent[i] = p_.recent[i];
     s->average = p_.w.average; s->deviation = p_.w.deviation;
@@ -261,6 +276,7 @@ class Engine {
       if (c.trigger_dev2 == 0 || c.trigger_dev2 < -9 || c.trigger_dev2 > 9) return TC_ERR_INVALID_CONFIG;
       if ((c.deviation_direction == 0) != (c.trigger_dev2 > 0)) return TC_ERR_INVALID_CONFIG;
     }
+    if (c.s2_dev1 < -9 || c.s2_dev1 > 9 || c.s2_dev2 < -9 || c.s2_dev2 > 9 || c.s2_dev3 < -9 || c.s2_dev3 > 9) return TC_ERR_INVALID_CONFIG;
     if (c.max_consecutive_losses < 0) return TC_ERR_INVALID_CONFIG;
     return 0;
   }
@@ -269,7 +285,7 @@ class Engine {
     if (p_.fsm == TC_FSM_MONITORING && p_.bot != TC_BOT_RUNNING) go(TC_FSM_IDLE);
     else if (p_.fsm == TC_FSM_IDLE && p_.bot == TC_BOT_RUNNING) go(TC_FSM_MONITORING);
   }
-  void finalize() { p_.last_done = p_.rec; p_.record_seq++; }
+  void finalize() { p_.last_done = p_.rec; p_.record_seq++; p_.trade_owner = -1; }
   void settle(bool win, double profit) {
     go(TC_FSM_SETTLED); go(TC_FSM_STATE_UPDATE);
     p_.total_trades++; p_.stats_pnl += profit; p_.session_pnl += profit; p_.daily_pnl += profit; p_.last_profit = profit;
@@ -281,6 +297,13 @@ class Engine {
       p_.losses++; p_.consec_losses++;
       if (p_.cfg.martingale_enabled) p_.mlevel++;
       if (p_.recovery < 2) p_.recovery++;                                                    // RECOVERY_2 holds on further losses
+    }
+    if (p_.trade_owner == 1 && p_.s2_last_applied != p_.rec.trade_id) {          // Strategy 2 transition table, applied once per confirmed result
+      p_.s2_last_applied = p_.rec.trade_id;
+      static const int kWin[3] = {1, 2, 1}, kLoss[3] = {2, 0, 0};
+      int from = p_.s2_trade_idx; if (from < 0 || from > 2) from = 0;
+      p_.s2_idx = win ? kWin[from] : kLoss[from];
+      if (win) p_.s2_wins++; else p_.s2_losses++;
     }
     if (p_.cfg.loss_dev_filter) {
       if (win) p_.has_restrict = 0;                                   // restriction consumed by an allowed winning trade

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/constants.dart';
 import '../core/errors.dart';
 import '../models/strategy_config.dart';
 import '../state/app_controller.dart';
@@ -37,6 +38,31 @@ class _ConfigScreenState extends State<ConfigScreen> {
         ]),
       );
 
+  /// Collapsible strategy card with its own ON/OFF switch (applied immediately, independent of Save).
+  Widget _strategyCard({required String title, required String sub, required bool on, required void Function(bool) onToggle, required List<Widget> children, bool open = false}) =>
+      Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), color: Pal.deep2,
+            boxShadow: const [BoxShadow(color: Color(0x330B2B1D), blurRadius: 18, offset: Offset(0, 8))]),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: open, maintainState: true, iconColor: Pal.lime, collapsedIconColor: Pal.onDeepDim,
+            tilePadding: const EdgeInsets.fromLTRB(16, 4, 10, 4), childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(color: Pal.onDeep, fontWeight: FontWeight.w800, fontSize: 16)),
+                Text(sub, style: const TextStyle(color: Pal.onDeepDim, fontSize: 11)),
+              ])),
+              Pill(on ? 'ON' : 'OFF', bg: on ? Pal.lime : Pal.surface, fg: on ? Pal.deep : Pal.onDeepDim),
+              Switch(value: on, onChanged: onToggle, activeColor: Pal.deep, activeTrackColor: Pal.lime, inactiveTrackColor: Pal.surface, inactiveThumbColor: Pal.onDeepDim),
+            ]),
+            children: children,
+          ),
+        ),
+      );
+
   Widget _switch(String label, String sub, bool v, void Function(bool) set) => SwitchListTile(
         contentPadding: EdgeInsets.zero, value: v, onChanged: (x) => setState(() => set(x)),
         activeColor: Pal.deep, activeTrackColor: Pal.lime, inactiveTrackColor: Pal.surface, inactiveThumbColor: Pal.onDeepDim,
@@ -44,8 +70,31 @@ class _ConfigScreenState extends State<ConfigScreen> {
         subtitle: Text(sub, style: const TextStyle(color: Pal.onDeepDim, fontSize: 11)),
       );
 
-  int? _i(String k) => int.tryParse(_t[k]!.text.trim());
-  double? _d(String k) => double.tryParse(_t[k]!.text.trim().replaceAll(',', '.'));
+  // Fields inside a collapsed panel may never have been built: fall back to the saved value so Save always sees every field.
+  Widget _s2Status() {
+    final st = a.snap.s;
+    String lbl(int i) { final v = c.s2Dev(i); return 'D${i + 1} (${v >= 0 ? '+' : ''}${v.toStringAsFixed(1)})'; }
+    return Row(children: [
+      Expanded(child: Lcd('ACTIVE', lbl(st.s2_idx.clamp(0, 2)), size: 14, color: Pal.lime)), const SizedBox(width: 8),
+      Expanded(child: Lcd('W / L', '${st.s2_wins}/${st.s2_losses}', size: 14)),
+      if (st.s2_pending == 1) ...[const SizedBox(width: 8), const Expanded(child: Lcd('TRADE', 'PENDING', size: 12, color: Pal.amber))],
+    ]);
+  }
+
+  Future<void> _newCycle() async {
+    final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+      title: const Text('Start a new cycle?'),
+      content: const Text('Strategy 2 returns to Deviation 1. Its configuration and win/loss counts are kept.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Start new cycle'))]));
+    if (ok == true) a.command(Cmd.s2NewCycle);
+  }
+
+  int? _i(String k) => int.tryParse((_t[k]?.text ?? '${_saved(k)}').trim());
+  double? _d(String k) => double.tryParse((_t[k]?.text ?? '${_saved(k)}').trim().replaceAll(',', '.'));
+  num _saved(String k) {
+    final j = c.toJson();
+    return (j[k] as num?) ?? 0;
+  }
 
   String? _collect() {
     final v = <String, Object?>{
@@ -66,6 +115,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
       if (problem != null) return problem;
       c.triggerDeviation = dv;
     }
+    final s2 = <double?>[_d('s2Dev1'), _d('s2Dev2'), _d('s2Dev3')];
+    for (int k = 0; k < 3; k++) {
+      if (s2[k] == null) return 'Strategy 2 Deviation ${k + 1} needs a number such as +2.0 or -1.5.';
+      final pr = StrategyConfig.s2Problem(s2[k]!);
+      if (pr != null) return 'Strategy 2 Deviation ${k + 1}: $pr';
+    }
+    c.s2Dev1 = s2[0]!; c.s2Dev2 = s2[1]!; c.s2Dev3 = s2[2]!;
     c.consecutiveCount = v['consec'] as int; c.stake = v['stake'] as double;
     c.takeProfit = v['tp'] as double; c.stopLoss = v['sl'] as double; c.multiplier = v['mult'] as double;
     c.martingaleMaxSteps = v['steps'] as int; c.maxStake = v['maxStake'] as double; c.maxDailyLoss = v['maxDaily'] as double;
@@ -101,7 +157,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
         }
         return ListView(padding: const EdgeInsets.only(bottom: 24), children: [
           const ScreenTitle('Strategy', sub: 'Saved settings are enforced by the trading engine'),
-          Panel(title: 'TRIGGER (one mode active at a time)', child: Column(children: [
+          _strategyCard(title: 'Strategy 1', sub: 'Consecutive deviations + trigger digit / deviation', on: a.snap.s.s1_on == 1,
+            onToggle: (v) => a.command(v ? Cmd.s1On : Cmd.s1Off), open: true, children: [
             _seg('Initial direction', const ['OVER', 'UNDER'], c.direction, (i) => c.direction = i),
             _seg('Deviation', const ['POSITIVE', 'NEGATIVE'], c.deviationDirection, (i) => c.deviationDirection = i),
             _field('Consecutive deviations', 'consecutiveCount', c.consecutiveCount),
@@ -111,7 +168,19 @@ class _ConfigScreenState extends State<ConfigScreen> {
             else
               _field('Deviation trigger (e.g. +0.5 or -1.5, sign must match direction)', 'triggerDeviation', c.triggerDeviation, signed: true),
             _field('Initial barrier (OVER 0-8 / UNDER 1-9)', 'initialBarrier', c.initialBarrier),
-          ])),
+          ]),
+          _strategyCard(title: 'Strategy 2', sub: 'Three exact deviations, advanced by each result', on: a.snap.s.s2_on == 1,
+            onToggle: (v) => a.command(v ? Cmd.s2On : Cmd.s2Off), children: [
+            _field('Deviation 1 (e.g. +2.0)', 's2Dev1', c.s2Dev1, signed: true),
+            _field('Deviation 2 (e.g. -1.5)', 's2Dev2', c.s2Dev2, signed: true),
+            _field('Deviation 3 (e.g. +0.5)', 's2Dev3', c.s2Dev3, signed: true),
+            _s2Status(),
+            const SizedBox(height: 10),
+            MetalButton('START NEW CYCLE (back to Deviation 1)', onTap: () => _newCycle()),
+            const SizedBox(height: 10),
+            const Text('Win/Loss moves: D1 \u2192 D2 / D3, D2 \u2192 D3 / D1, D3 \u2192 D2 / D1. It advances only on a confirmed result. Barrier, direction, stake, recovery, martingale and risk limits are shared with the rest of the app. The bot must be started on the Trade tab. Turning Strategy 2 OFF keeps its place in the cycle.',
+                style: TextStyle(color: Pal.onDeepDim, fontSize: 11)),
+          ]),
           Panel(title: 'GLOBAL FILTER', child: _switch(
             'Loss-Deviation Filter', 'After a loss, skip the next qualifying trade only if its deviation equals the losing one. Skipped signals are not trades and change no recovery or martingale state. OFF = original behaviour.',
             c.lossDevFilter, (v) => c.lossDevFilter = v)),

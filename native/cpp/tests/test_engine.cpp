@@ -228,9 +228,97 @@ static void test_trigger_modes() {
   // record keeps the actual final digit in deviation mode; loss filter / recovery still operate
   { T t; CHECK(mk(t, 1, 0, 1, 3, 2) == 0); t.feed({0, 7, 8}); lose(t); TcRecord r; CHECK(engine_get_last_record(t.h, &r) == 1 && r.trigger_digit == 8 && t.st().recovery_level == 1); }
 }
-static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 23 * 8 && s[1] == (38 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
+
+// ---------- Strategy 2 ----------
+// S2 deviations (doubled): D1 = +2.0 (4), D2 = -1.5 (-3), D3 = +0.5 (1).
+static void s2setup(T& t, bool s1 = false) {
+  TcConfig c = t.cfg(); c.s2_dev1 = 4; c.s2_dev2 = -3; c.s2_dev3 = 1; CHECK(engine_configure(t.h, &c) == 0); t.ready();
+  engine_command(t.h, s1 ? TC_CMD_S1_ON : TC_CMD_S1_OFF); engine_command(t.h, TC_CMD_S2_ON); engine_command(t.h, TC_CMD_START); }
+static void fire(T& t, int idx) {            // two ticks whose deviation equals the configured one for deviation `idx`
+  static const int pre[3] = {2, 5, 8}, post[3] = {6, 2, 9}; t.tick(pre[idx]); t.tick(post[idx]); }
+static void test_strategy2() {
+  const int kWinTo[3] = {1, 2, 1}, kLossTo[3] = {2, 0, 0};            // the spec's table
+  for (int from = 0; from < 3; from++) for (int w = 0; w < 2; w++) {  // all six transitions
+    T t; s2setup(t);
+    // walk the cycle to `from` using the table itself
+    int path[3][3] = {{-1}, {1, -1}, {1, 2}}; (void)path;
+    int guard = 0; while (t.st().s2_idx != from && guard++ < 6) { fire(t, t.st().s2_idx); win(t); }
+    CHECK(t.st().s2_idx == from);
+    fire(t, from); CHECK(t.r.action == TC_ACT_EXECUTE); CHECK(t.st().s2_pending == 1 && t.st().trade_owner == 1);
+    CHECK(t.st().s2_idx == from);                                     // nothing moves while the trade is open
+    if (w) win(t); else lose(t);
+    CHECK(t.st().s2_idx == (w ? kWinTo[from] : kLossTo[from])); CHECK(t.st().s2_pending == 0);
+  }
+  { T t; s2setup(t); CHECK(t.st().s2_idx == 0);                        // first activation starts at Deviation 1
+    t.tick(2); t.tick(6); CHECK(t.r.action == TC_ACT_EXECUTE && t.r.barrier == 4); win(t);
+    CHECK(t.st().s2_idx == 1);
+    t.tick(2); t.tick(6); CHECK(t.r.action == TC_ACT_NONE);           // D1's deviation no longer fires: D2 (-1.5) is active
+    t.tick(5); t.tick(2); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  // activation / deactivation
+  { T t; s2setup(t); engine_command(t.h, TC_CMD_S2_OFF); fire(t, 0); CHECK(t.r.action == TC_ACT_NONE && t.st().s2_on == 0);
+    engine_command(t.h, TC_CMD_S2_ON); fire(t, 0); CHECK(t.r.action == TC_ACT_EXECUTE); win(t); CHECK(t.st().s2_idx == 1);
+    engine_command(t.h, TC_CMD_S2_OFF); engine_command(t.h, TC_CMD_S2_ON); CHECK(t.st().s2_idx == 1);   // re-enable RESUMES, never restarts
+    engine_command(t.h, TC_CMD_S2_NEW_CYCLE); CHECK(t.st().s2_idx == 0); }                                // explicit fresh cycle
+  { T t; s2setup(t); fire(t, 0); engine_command(t.h, TC_CMD_S2_OFF);                                      // OFF while a trade is open
+    CHECK(t.st().fsm_state == TC_FSM_EXECUTING && t.st().open_contract_id == 0);
+    CHECK(engine_command(t.h, TC_CMD_S2_NEW_CYCLE) == TC_ERR_BUSY);
+    win(t); CHECK(t.st().s2_idx == 1 && t.st().total_trades == 1 && t.st().s2_on == 0); }               // still settles + transitions
+  // simultaneous strategies keep independent state
+  { T t; s2setup(t, true); TcConfig c = t.cfg(); c.s2_dev1 = 4; c.s2_dev2 = -3; c.s2_dev3 = 1; engine_configure(t.h, &c);
+    t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE && t.st().trade_owner == 0); lose(t);               // Strategy 1 trade
+    TcState a = t.st(); CHECK(a.s2_idx == 0 && a.s2_wins == 0 && a.s2_losses == 0 && a.recovery_level == 1);  // S1 result never moves S2
+    fire(t, 0); CHECK(t.r.action == TC_ACT_EXECUTE && t.st().trade_owner == 1); win(t);                       // Strategy 2 trade
+    CHECK(t.st().s2_idx == 1 && t.st().s1_on == 1 && t.st().s2_wins == 1);
+    engine_command(t.h, TC_CMD_S1_OFF); CHECK(t.st().s2_idx == 1 && t.st().s2_on == 1);                        // toggling S1 leaves S2 alone
+    t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_NONE); }
+  { T t; s2setup(t, true); t.tick(1); t.tick(4); t.tick(8);        // both qualify on the same tick: only one trade, Strategy 1 wins the tie
+    // digits 1,4,8: +1.5 then +2.0; S1 (2 positive, digit 8) qualifies and S2 D1 (+2.0) also matches
+    CHECK(t.r.action == TC_ACT_EXECUTE && t.st().trade_owner == 0); }
+  // duplicate / late results change nothing
+  { T t; s2setup(t); fire(t, 0); int64_t id = t.r.trade_id;
+    CHECK(engine_on_buy_result(t.h, id, 1, 55, 1, 0, 0) == 0); CHECK(engine_on_contract_update(t.h, 55, 0, 0, 1) == 0);
+    CHECK(t.st().s2_idx == 0);                                         // OPEN (not settled) does not transition
+    CHECK(engine_on_contract_update(t.h, 55, 2, -1.0, 2) == 1); CHECK(t.st().s2_idx == 2);
+    CHECK(engine_on_contract_update(t.h, 55, 2, -1.0, 3) == 0); CHECK(engine_on_contract_update(t.h, 55, 1, 1.0, 4) == 0);
+    CHECK(t.st().s2_idx == 2 && t.st().s2_losses == 1 && t.st().total_trades == 1);
+    CHECK(engine_on_buy_result(t.h, id, 1, 55, 1, 0, 0) == 0); CHECK(t.st().s2_idx == 2); }
+  // pending / unconfirmed trade never transitions; reconcile resolves exactly once
+  { T t; s2setup(t); fire(t, 0); int64_t id = t.r.trade_id; CHECK(engine_on_exec_timeout(t.h, id) == 1);
+    CHECK(t.st().s2_idx == 0 && t.st().needs_reconcile == 1); fire(t, 0); CHECK(t.r.action == TC_ACT_NONE);       // no second trade
+    CHECK(engine_reconcile(t.h, id, 0, 0, 0, 0, 0) == 1); CHECK(t.st().s2_idx == 0 && t.st().last_result == TC_RES_UNCONFIRMED); }   // not found => stays put
+  { T t; s2setup(t); fire(t, 0); int64_t id = t.r.trade_id; engine_on_exec_timeout(t.h, id);
+    CHECK(engine_reconcile(t.h, id, 1, 900, 1, 0.9, 5) == 1); CHECK(t.st().s2_idx == 1);                           // found + won => D2
+    CHECK(engine_reconcile(t.h, id, 1, 900, 1, 0.9, 6) == 0); CHECK(t.st().s2_idx == 1 && t.st().s2_wins == 1); }
+  { T t; s2setup(t); fire(t, 0); engine_on_buy_result(t.h, t.r.trade_id, 0, 0, 0, TC_ERR_TRADE_REJECTED, 0);     // rejected buy: no transition
+    CHECK(t.st().s2_idx == 0 && t.st().s2_wins == 0 && t.st().s2_losses == 0 && t.st().bot_status == TC_BOT_PAUSED); }
+  // state restoration: exact deviation + pending trade survive a restart; no replay, no double transition
+  { T t; s2setup(t); fire(t, 0); win(t); fire(t, 1); lose(t); CHECK(t.st().s2_idx == 0);
+    fire(t, 0); win(t); CHECK(t.st().s2_idx == 1);
+    std::vector<uint8_t> b(8192); int n = engine_serialize(t.h, b.data(), (int)b.size());
+    T r; CHECK(engine_restore(r.h, b.data(), n, 1) == 0); TcState z = r.st();
+    CHECK(z.s2_idx == 1 && z.s2_on == 1 && z.s1_on == 0 && z.s2_wins == t.st().s2_wins && z.s2_losses == t.st().s2_losses);
+    r.ready(); r.ep = t.ep; fire(r, 1); CHECK(r.r.action == TC_ACT_EXECUTE); }                                     // resumes at D2, not D1
+  { T t; s2setup(t); fire(t, 0); int64_t id = t.r.trade_id; engine_on_buy_result(t.h, id, 1, 77, 1, 0, 0);       // restart while the contract is OPEN
+    std::vector<uint8_t> b(8192); int n = engine_serialize(t.h, b.data(), (int)b.size());
+    T r; CHECK(engine_restore(r.h, b.data(), n, 1) == 0); CHECK(r.st().s2_pending == 1 && r.st().s2_idx == 0 && r.st().fsm_state == TC_FSM_OPEN);
+    r.ready(); CHECK(engine_on_contract_update(r.h, 77, 1, 0.9, 9) == 1); CHECK(r.st().s2_idx == 1);
+    CHECK(engine_on_contract_update(r.h, 77, 1, 0.9, 10) == 0); CHECK(r.st().s2_idx == 1); }
+  { T t; s2setup(t); fire(t, 0); int64_t id = t.r.trade_id;                                                       // restart while EXECUTING (buy unconfirmed)
+    std::vector<uint8_t> b(8192); int n = engine_serialize(t.h, b.data(), (int)b.size());
+    T r; CHECK(engine_restore(r.h, b.data(), n, 1) == 0); CHECK(r.st().needs_reconcile == 1 && r.st().s2_idx == 0 && r.st().s2_pending == 1);
+    r.ready(); CHECK(engine_reconcile(r.h, id, 1, 5, 2, -1.0, 1) == 1); CHECK(r.st().s2_idx == 2); }
+  // reconnect (connection dropped and restored) keeps the cycle
+  { T t; s2setup(t); fire(t, 0); win(t); engine_set_conn(t.h, 1, TC_CONN_RECONNECTING); fire(t, 1); CHECK(t.r.action == TC_ACT_BLOCKED);
+    CHECK(t.st().s2_idx == 1); engine_set_conn(t.h, 1, TC_CONN_READY); engine_on_balance(t.h, "VRTC100", 1000, "USD"); fire(t, 1); CHECK(t.r.action == TC_ACT_EXECUTE); }
+  // validation
+  { T t; TcConfig c = t.cfg(); c.s2_dev1 = 10; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG); c.s2_dev1 = -9; CHECK(engine_configure(t.h, &c) == 0); }
+  // Strategy 1 untouched when S2 is OFF (default)
+  { T t; TcConfig c = t.cfg(); engine_configure(t.h, &c); t.ready(); engine_command(t.h, TC_CMD_START); CHECK(t.st().s1_on == 1 && t.st().s2_on == 0);
+    t.feed({0, 7, 8}); CHECK(t.r.action == TC_ACT_EXECUTE && t.st().trade_owner == 0); win(t); CHECK(t.st().s2_idx == 0 && t.st().s2_wins == 0); }
+}
+static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 26 * 8 && s[1] == (46 + 16 + 8) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
   test_math(); test_sequences(); test_trigger(); test_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_abi();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

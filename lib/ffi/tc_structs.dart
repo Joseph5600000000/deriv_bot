@@ -20,6 +20,9 @@ final class TcConfig extends Struct {
   @Int64() external int recovery_direction2;
   @Int64() external int trigger_mode;
   @Int64() external int trigger_dev2;
+  @Int64() external int s2_dev1;
+  @Int64() external int s2_dev2;
+  @Int64() external int s2_dev3;
   @Double() external double stake;
   @Double() external double take_profit;
   @Double() external double stop_loss;
@@ -80,6 +83,14 @@ final class TcState extends Struct {
   @Int64() external int loss_filter_on;
   @Int64() external int restricted_dev2;
   @Int64() external int filter_rejects;
+  @Int64() external int s1_on;
+  @Int64() external int s2_on;
+  @Int64() external int s2_idx;
+  @Int64() external int s2_wins;
+  @Int64() external int s2_losses;
+  @Int64() external int trade_owner;
+  @Int64() external int s2_started;
+  @Int64() external int s2_pending;
   @Array(16) external Array<Int64> recent;
   @Double() external double average;
   @Double() external double deviation;

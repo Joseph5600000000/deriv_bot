@@ -11,6 +11,7 @@ inline int64_t barrier_for(const TcConfig& c, int level) {
 inline int64_t direction_for(const TcConfig& c, int level) {
   return level == 0 ? c.direction : level == 1 ? c.recovery_direction1 : c.recovery_direction2;
 }
+inline int64_t s2_dev_for(const TcConfig& c, int idx) { return idx == 0 ? c.s2_dev1 : idx == 1 ? c.s2_dev2 : c.s2_dev3; }   // doubled deviation (cur-prev)
 // Trigger = required consecutive run in the chosen direction AND the final-deviation condition of the active mode:
 //   mode 0 (Trigger Digit):      current digit == trigger digit            (original behaviour, unchanged)
 //   mode 1 (Deviation Trigger):  signed deviation == configured deviation  (exact: compared as doubled integer cur-prev,

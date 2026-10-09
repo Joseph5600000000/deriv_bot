@@ -22,6 +22,9 @@ typedef struct TcConfig {
   int64_t recovery_direction2;
   int64_t trigger_mode;
   int64_t trigger_dev2;
+  int64_t s2_dev1;
+  int64_t s2_dev2;
+  int64_t s2_dev3;
   double stake;
   double take_profit;
   double stop_loss;
@@ -80,6 +83,14 @@ typedef struct TcState {
   int64_t loss_filter_on;
   int64_t restricted_dev2;
   int64_t filter_rejects;
+  int64_t s1_on;
+  int64_t s2_on;
+  int64_t s2_idx;
+  int64_t s2_wins;
+  int64_t s2_losses;
+  int64_t trade_owner;
+  int64_t s2_started;
+  int64_t s2_pending;
   int64_t recent[16];
   double average;
   double deviation;

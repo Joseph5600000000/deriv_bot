@@ -67,3 +67,11 @@ If any step fights you, use Path B.
 - Deviation mode: final deviation must equal the configured signed value EXACTLY (compared inside the engine as the whole-number difference current-previous, no rounding). Steps of 0.5, range +-0.5 to +-4.5. Sign must match the Positive/Negative direction.
 - Saved settings from older versions load in Trigger Digit mode, unchanged.
 - Engine state from earlier versions is ignored once (snapshot format v4).
+
+## Upgrade notes (v6 - Strategy 2)
+- Strategy tab: Strategy 1 (existing trigger) and Strategy 2 are collapsible cards, each with its own ON/OFF switch (applied immediately).
+- Strategy 2: three exact signed deviations. Fires when the signed deviation (current digit - average of last two digits) equals the ACTIVE deviation. Transition on a CONFIRMED result only: D1 win->D2 loss->D3, D2 win->D3 loss->D1, D3 win->D2 loss->D1.
+- One shared trade slot: only one contract at a time. If both strategies qualify on the same tick, Strategy 1 trades. Results of one strategy never move the other's cycle.
+- Shared with Strategy 1: market, direction/barrier by recovery level, stake, martingale, recovery, risk limits, loss-deviation filter, bot START/PAUSE/STOP.
+- First time S2 is switched ON it starts at Deviation 1; switching OFF/ON later RESUMES. "Start new cycle" is the only way back to D1.
+- Rejected buys and unconfirmed/unreconciled trades never move the cycle. Engine state from earlier versions is ignored once (snapshot v5).
