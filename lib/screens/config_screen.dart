@@ -186,7 +186,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             const SizedBox(height: 10),
             MetalButton('START NEW CYCLE (back to Deviation 1)', onTap: () => _newCycle()),
             const SizedBox(height: 10),
-            const Text('Each deviation also has a count: N means the trigger must be preceded by N-1 consecutive deviations of the same sign (taken from the trigger's sign). Count 1 = trigger only. Win/Loss moves: D1 \u2192 D2 / D3, D2 \u2192 D3 / D1, D3 \u2192 D2 / D1. It advances only on a confirmed result. Barrier, direction, stake, recovery, martingale and risk limits are shared with the rest of the app. The bot must be started on the Trade tab. Turning Strategy 2 OFF keeps its place in the cycle.',
+            const Text('Each deviation also has a count: N means the trigger must be preceded by N-1 consecutive deviations of the same sign (taken from the sign of the trigger). Count 1 = trigger only. Win/Loss moves: D1 \u2192 D2 / D3, D2 \u2192 D3 / D1, D3 \u2192 D2 / D1. It advances only on a confirmed result. Barrier, direction, stake, recovery, martingale and risk limits are shared with the rest of the app. The bot must be started on the Trade tab. Turning Strategy 2 OFF keeps its place in the cycle.',
                 style: TextStyle(color: Pal.onDeepDim, fontSize: 11)),
           ]),
           Panel(title: 'GLOBAL FILTER', child: _switch(
