@@ -23,6 +23,9 @@ final class TcConfig extends Struct {
   @Int64() external int s2_dev1;
   @Int64() external int s2_dev2;
   @Int64() external int s2_dev3;
+  @Int64() external int s2_cnt1;
+  @Int64() external int s2_cnt2;
+  @Int64() external int s2_cnt3;
   @Double() external double stake;
   @Double() external double take_profit;
   @Double() external double stop_loss;

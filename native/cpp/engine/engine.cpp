@@ -105,7 +105,7 @@ class Engine {
     if (p_.recent_count < 16) p_.recent[p_.recent_count++] = d;
     else { memmove(p_.recent, p_.recent + 1, 15 * sizeof(int64_t)); p_.recent[15] = d; }
     bool q1 = p_.has_cfg && p_.s1_on && qualified(p_.cfg, p_.w);
-    bool q2 = p_.has_cfg && p_.s2_on && p_.w.has_dev && (int64_t)(p_.w.cur - p_.w.prev) == s2_dev_for(p_.cfg, p_.s2_idx);
+    bool q2 = p_.has_cfg && p_.s2_on && s2_qualified(p_.cfg, p_.w, p_.s2_idx);
     bool q = q1 || q2;
     int owner = q1 ? 0 : 1;                                    // one shared trade slot; Strategy 1 keeps priority on a tie
     p_.trig_status = q ? 1 : 0;
@@ -277,6 +277,7 @@ class Engine {
       if ((c.deviation_direction == 0) != (c.trigger_dev2 > 0)) return TC_ERR_INVALID_CONFIG;
     }
     if (c.s2_dev1 < -9 || c.s2_dev1 > 9 || c.s2_dev2 < -9 || c.s2_dev2 > 9 || c.s2_dev3 < -9 || c.s2_dev3 > 9) return TC_ERR_INVALID_CONFIG;
+    if (c.s2_cnt1 < 0 || c.s2_cnt1 > 50 || c.s2_cnt2 < 0 || c.s2_cnt2 > 50 || c.s2_cnt3 < 0 || c.s2_cnt3 > 50) return TC_ERR_INVALID_CONFIG;   // 0 is read as 1 (older saves)
     if (c.max_consecutive_losses < 0) return TC_ERR_INVALID_CONFIG;
     return 0;
   }

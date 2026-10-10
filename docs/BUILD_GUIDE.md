@@ -84,3 +84,7 @@ If any step fights you, use Path B.
 ## Upgrade notes (v8 - persistent martingale stake during recovery)
 - With Martingale on, the stake progression is kept for the whole recovery cycle (any strategy, any recovery barrier) until the unrecovered loss is fully cleared; only then does the stake return to the configured initial stake.
 - Fixed the clipped "Deviation 1" field title inside the collapsible strategy cards (extra top padding).
+
+## Upgrade notes (v9 - Strategy 2 consecutive counts)
+- Each Strategy 2 deviation has an editable count N (1-50). N-1 deviations of the trigger's own sign must immediately precede the trigger (N=1 = trigger only, the old behaviour). Longer runs also qualify; a zero deviation breaks the run. A 0.0 trigger has no sign, so its count is not applied.
+- Only the currently active deviation's count is checked; transitions, barriers, recovery and martingale are unchanged. Snapshot format v7 (old saved state ignored once).

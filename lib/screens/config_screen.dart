@@ -73,7 +73,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
   // Fields inside a collapsed panel may never have been built: fall back to the saved value so Save always sees every field.
   Widget _s2Status() {
     final st = a.snap.s;
-    String lbl(int i) { final v = c.s2Dev(i); return 'D${i + 1} (${v >= 0 ? '+' : ''}${v.toStringAsFixed(1)})'; }
+    String lbl(int i) { final v = c.s2Dev(i); return 'D${i + 1} (${v >= 0 ? '+' : ''}${v.toStringAsFixed(1)}) ×${c.s2Cnt(i)}'; }
     return Row(children: [
       Expanded(child: Lcd('ACTIVE', lbl(st.s2_idx.clamp(0, 2)), size: 14, color: Pal.lime)), const SizedBox(width: 8),
       Expanded(child: Lcd('W / L', '${st.s2_wins}/${st.s2_losses}', size: 14)),
@@ -121,6 +121,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final pr = StrategyConfig.s2Problem(s2[k]!);
       if (pr != null) return 'Strategy 2 Deviation ${k + 1}: $pr';
     }
+    final cn = <int?>[_i('s2Cnt1'), _i('s2Cnt2'), _i('s2Cnt3')];
+    for (int k = 0; k < 3; k++) {
+      if (cn[k] == null || cn[k]! < 1 || cn[k]! > 50) return 'Strategy 2 Deviation ${k + 1} count must be a whole number from 1 to 50.';
+    }
+    c.s2Cnt1 = cn[0]!; c.s2Cnt2 = cn[1]!; c.s2Cnt3 = cn[2]!;
     c.s2Dev1 = s2[0]!; c.s2Dev2 = s2[1]!; c.s2Dev3 = s2[2]!;
     c.consecutiveCount = v['consec'] as int; c.stake = v['stake'] as double;
     c.takeProfit = v['tp'] as double; c.stopLoss = v['sl'] as double; c.multiplier = v['mult'] as double;
@@ -172,13 +177,16 @@ class _ConfigScreenState extends State<ConfigScreen> {
           _strategyCard(title: 'Strategy 2', sub: 'Three exact deviations, advanced by each result', on: a.snap.s.s2_on == 1,
             onToggle: (v) => a.command(v ? Cmd.s2On : Cmd.s2Off), children: [
             _field('Deviation 1 (e.g. +2.0)', 's2Dev1', c.s2Dev1, signed: true),
+            _field('Deviation 1 count (1 = trigger only)', 's2Cnt1', c.s2Cnt1),
             _field('Deviation 2 (e.g. -1.5)', 's2Dev2', c.s2Dev2, signed: true),
+            _field('Deviation 2 count (1 = trigger only)', 's2Cnt2', c.s2Cnt2),
             _field('Deviation 3 (e.g. +0.5)', 's2Dev3', c.s2Dev3, signed: true),
+            _field('Deviation 3 count (1 = trigger only)', 's2Cnt3', c.s2Cnt3),
             _s2Status(),
             const SizedBox(height: 10),
             MetalButton('START NEW CYCLE (back to Deviation 1)', onTap: () => _newCycle()),
             const SizedBox(height: 10),
-            const Text('Win/Loss moves: D1 \u2192 D2 / D3, D2 \u2192 D3 / D1, D3 \u2192 D2 / D1. It advances only on a confirmed result. Barrier, direction, stake, recovery, martingale and risk limits are shared with the rest of the app. The bot must be started on the Trade tab. Turning Strategy 2 OFF keeps its place in the cycle.',
+            const Text('Each deviation also has a count: N means the trigger must be preceded by N-1 consecutive deviations of the same sign (taken from the trigger's sign). Count 1 = trigger only. Win/Loss moves: D1 \u2192 D2 / D3, D2 \u2192 D3 / D1, D3 \u2192 D2 / D1. It advances only on a confirmed result. Barrier, direction, stake, recovery, martingale and risk limits are shared with the rest of the app. The bot must be started on the Trade tab. Turning Strategy 2 OFF keeps its place in the cycle.',
                 style: TextStyle(color: Pal.onDeepDim, fontSize: 11)),
           ]),
           Panel(title: 'GLOBAL FILTER', child: _switch(

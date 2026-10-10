@@ -23,6 +23,18 @@ inline bool qualified(const TcConfig& c, const RollingWindow& w) {
   if (c.trigger_mode == 1) return (int64_t)(w.cur - w.prev) == c.trigger_dev2;
   return w.cur == c.trigger_digit;
 }
+// Strategy 2 trigger: exact doubled deviation AND the consecutive-run requirement of that deviation.
+// Count N includes the trigger itself: N-1 same-sign deviations must immediately precede it (N=1 => no extra requirement).
+// The required sign is derived from the trigger deviation; a 0.0 trigger has no sign, so its count is not applied.
+inline int64_t s2_cnt_for(const TcConfig& c, int idx) { int64_t n = idx == 0 ? c.s2_cnt1 : idx == 1 ? c.s2_cnt2 : c.s2_cnt3; return n < 1 ? 1 : n; }
+inline bool s2_qualified(const TcConfig& c, const RollingWindow& w, int idx) {
+  if (!w.has_dev) return false;
+  int64_t dev = s2_dev_for(c, idx);
+  if ((int64_t)(w.cur - w.prev) != dev) return false;
+  if (dev == 0) return true;
+  int run = dev > 0 ? w.consec_pos : w.consec_neg;
+  return run >= s2_cnt_for(c, idx);
+}
 inline double round2(double v) { return std::round(v * 100.0) / 100.0; }
 inline double stake_for(const TcConfig& c, int mlevel) {
   double s = c.stake;

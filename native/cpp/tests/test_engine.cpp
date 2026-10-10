@@ -366,9 +366,27 @@ static void test_martingale_persistence() {
   CHECK(t.st().recovery_level == 0 && t.st().martingale_level == 0 && t.st().unrecovered == 0);
   t.feed({0,7,8}); CHECK(t.r.stake == 5 && t.r.barrier == 4);
 }
-static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 26 * 8 && s[1] == (46 + 16 + 9) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
+static void test_s2_counts() {
+  auto mk = [](T& t, int c1, int c2, int c3) { s2setup(t); TcConfig c = t.cfg(); c.s2_dev1 = 4; c.s2_dev2 = -3; c.s2_dev3 = 1; c.s2_cnt1 = c1; c.s2_cnt2 = c2; c.s2_cnt3 = c3;
+    CHECK(engine_configure(t.h, &c) == 0); };
+  { T t; mk(t, 3, 2, 4);                                              // D1 +2.0 needs 2 positive deviations before it
+    t.feed({5, 1, 2}); t.tick(6); CHECK(t.r.action == TC_ACT_NONE);   // -4,+1,+4: only one positive before -> run 2 < 3
+    T u; mk(u, 3, 2, 4); u.feed({0, 1, 2}); u.tick(6); CHECK(u.r.action == TC_ACT_EXECUTE && u.st().trade_owner == 1);   // +1,+1,+4
+    T v; mk(v, 3, 2, 4); v.feed({0, 1, 1}); v.tick(5); CHECK(v.r.action == TC_ACT_NONE);                                  // zero deviation breaks the run
+    T w; mk(w, 3, 2, 4); w.feed({0, 1, 2, 3}); w.tick(7); CHECK(w.r.action == TC_ACT_EXECUTE);                           // longer run still qualifies
+    T x; mk(x, 3, 2, 4); x.feed({0, 1, 2}); x.tick(5); CHECK(x.r.action == TC_ACT_NONE); }                                // run ok, wrong deviation (+3 != +4)
+  { T t; mk(t, 3, 2, 4); t.feed({0, 1, 2}); t.tick(6); win(t); CHECK(t.st().s2_idx == 1);   // D2 -1.5 needs ONE negative before it
+    t.feed({2, 8}); t.tick(5); CHECK(t.r.action == TC_ACT_NONE);                           // +6 then -3: run 1 < 2
+    t.feed({9, 8}); t.tick(5); CHECK(t.r.action == TC_ACT_EXECUTE); lose(t); CHECK(t.st().s2_idx == 0); }   // -1 then -3 -> fires; loss -> D1
+  { T t; mk(t, 1, 1, 1); t.feed({5, 1}); t.tick(5); CHECK(t.r.action == TC_ACT_EXECUTE); }  // count 1 = trigger only (previous behaviour)
+  { T t; mk(t, 3, 2, 4); t.feed({0, 1, 2}); t.tick(6); win(t); t.feed({9, 8}); t.tick(5); win(t); CHECK(t.st().s2_idx == 2);   // D3 +0.5 count 4 -> 3 positives before it
+    t.feed({0, 1, 2}); t.tick(3); CHECK(t.r.action == TC_ACT_NONE);                         // +1 run of 3 < 4
+  }
+  { T t; TcConfig c = t.cfg(); c.s2_cnt1 = 51; CHECK(engine_configure(t.h, &c) == TC_ERR_INVALID_CONFIG); c.s2_cnt1 = 0; CHECK(engine_configure(t.h, &c) == 0); }
+}
+static void test_abi() { int64_t s[4]; engine_abi_sizes(s); CHECK(s[0] == 29 * 8 && s[1] == (46 + 16 + 9) * 8 && s[2] == 10 * 8 && s[3] == 25 * 8); }
 int main() {
   test_math(); test_sequences(); test_trigger(); test_recovery(); test_cumulative_recovery(); test_risk_martingale();
-  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_recovery_switching(); test_martingale_persistence(); test_abi();
+  test_duplicates_and_safety(); test_fsm_and_reject(); test_snapshot_and_reconcile(); test_loss_dev_filter(); test_clear_history(); test_recovery_directions(); test_trigger_modes(); test_strategy2(); test_recovery_switching(); test_martingale_persistence(); test_s2_counts(); test_abi();
   printf("%d checks, %d failed\n", checks, fails); return fails ? 1 : 0;
 }

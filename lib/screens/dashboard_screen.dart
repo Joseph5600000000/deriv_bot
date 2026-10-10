@@ -213,7 +213,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Row(children: [
           Expanded(child: Lcd('STRATEGY 1', s.s1_on == 1 ? 'ON' : 'OFF', size: 15, color: s.s1_on == 1 ? Pal.lime : Pal.onDeepDim)), const SizedBox(width: 8),
           Expanded(child: Lcd('STRATEGY 2', s.s2_on == 1 ? 'ON' : 'OFF', size: 15, color: s.s2_on == 1 ? Pal.lime : Pal.onDeepDim)), const SizedBox(width: 8),
-          Expanded(child: Lcd('S2 ACTIVE', s.s2_started == 0 ? '-' : 'D${s.s2_idx + 1} ${a.cfg.s2Dev(s.s2_idx) >= 0 ? '+' : ''}${a.cfg.s2Dev(s.s2_idx).toStringAsFixed(1)}', size: 13,
+          Expanded(child: Lcd('S2 ACTIVE', s.s2_started == 0 ? '-' : 'D${s.s2_idx + 1} ${a.cfg.s2Dev(s.s2_idx) >= 0 ? '+' : ''}${a.cfg.s2Dev(s.s2_idx).toStringAsFixed(1)} ×${a.cfg.s2Cnt(s.s2_idx)}', size: 13,
               sub: s.s2_pending == 1 ? 'trade pending' : null)),
         ]),
       ]),

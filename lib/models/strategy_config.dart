@@ -2,6 +2,7 @@ import '../ffi/tc_structs.dart';
 
 class StrategyConfig {
   int triggerMode; // 0 = Trigger Digit, 1 = Deviation Trigger
+  int s2Cnt1, s2Cnt2, s2Cnt3; // consecutive count per deviation (includes the trigger itself; 1 = no extra requirement)
   double s2Dev1, s2Dev2, s2Dev3; // Strategy 2 signed deviations (multiples of 0.5)
   double triggerDeviation; // signed, e.g. +0.5 / -1.5 (steps of 0.5)
   int market, direction, recoveryDirection1, recoveryDirection2, initialBarrier, recoveryBarrier1, recoveryBarrier2, triggerDigit, consecutiveCount,
@@ -10,7 +11,7 @@ class StrategyConfig {
   double stake, takeProfit, stopLoss, multiplier, maxStake, maxDailyLoss;
 
   StrategyConfig({
-    this.s2Dev1 = 2.0, this.s2Dev2 = -1.5, this.s2Dev3 = 0.5, this.triggerMode = 0, this.triggerDeviation = 0.5, this.market = 4, this.direction = 0, this.recoveryDirection1 = 0, this.recoveryDirection2 = 0, this.initialBarrier = 4, this.recoveryBarrier1 = 6, this.recoveryBarrier2 = 8,
+    this.s2Cnt1 = 1, this.s2Cnt2 = 1, this.s2Cnt3 = 1, this.s2Dev1 = 2.0, this.s2Dev2 = -1.5, this.s2Dev3 = 0.5, this.triggerMode = 0, this.triggerDeviation = 0.5, this.market = 4, this.direction = 0, this.recoveryDirection1 = 0, this.recoveryDirection2 = 0, this.initialBarrier = 4, this.recoveryBarrier1 = 6, this.recoveryBarrier2 = 8,
     this.triggerDigit = 3, this.consecutiveCount = 2, this.deviationDirection = 0, this.martingaleMaxSteps = 3,
     this.maxConsecutiveLosses = 5, this.winBehavior = 0, this.martingale = false, this.lossDevFilter = false, this.stake = 1.0,
     this.takeProfit = 0, this.stopLoss = 0, this.multiplier = 2.0, this.maxStake = 50, this.maxDailyLoss = 20,
@@ -19,7 +20,7 @@ class StrategyConfig {
   StrategyConfig copy() => StrategyConfig.fromJson(toJson());
 
   Map<String, dynamic> toJson() => {
-        's2Dev1': s2Dev1, 's2Dev2': s2Dev2, 's2Dev3': s2Dev3, 'triggerMode': triggerMode, 'triggerDeviation': triggerDeviation, 'market': market, 'direction': direction, 'recoveryDirection1': recoveryDirection1, 'recoveryDirection2': recoveryDirection2, 'initialBarrier': initialBarrier,
+        's2Cnt1': s2Cnt1, 's2Cnt2': s2Cnt2, 's2Cnt3': s2Cnt3, 's2Dev1': s2Dev1, 's2Dev2': s2Dev2, 's2Dev3': s2Dev3, 'triggerMode': triggerMode, 'triggerDeviation': triggerDeviation, 'market': market, 'direction': direction, 'recoveryDirection1': recoveryDirection1, 'recoveryDirection2': recoveryDirection2, 'initialBarrier': initialBarrier,
         'recoveryBarrier1': recoveryBarrier1, 'recoveryBarrier2': recoveryBarrier2, 'triggerDigit': triggerDigit,
         'consecutiveCount': consecutiveCount, 'deviationDirection': deviationDirection,
         'martingaleMaxSteps': martingaleMaxSteps, 'maxConsecutiveLosses': maxConsecutiveLosses,
@@ -32,6 +33,7 @@ class StrategyConfig {
     int i(String k, int dv) => (j[k] as num?)?.toInt() ?? dv;
     double f(String k, double dv) => (j[k] as num?)?.toDouble() ?? dv;
     return StrategyConfig(
+      s2Cnt1: i('s2Cnt1', 1), s2Cnt2: i('s2Cnt2', 1), s2Cnt3: i('s2Cnt3', 1),
       s2Dev1: f('s2Dev1', d.s2Dev1), s2Dev2: f('s2Dev2', d.s2Dev2), s2Dev3: f('s2Dev3', d.s2Dev3),
       triggerMode: i('triggerMode', 0), triggerDeviation: f('triggerDeviation', d.triggerDeviation),
       market: i('market', d.market), direction: i('direction', d.direction),
@@ -56,6 +58,7 @@ class StrategyConfig {
     return null;
   }
 
+  int s2Cnt(int idx) => idx == 0 ? s2Cnt1 : (idx == 1 ? s2Cnt2 : s2Cnt3);
   double s2Dev(int idx) => idx == 0 ? s2Dev1 : (idx == 1 ? s2Dev2 : s2Dev3);
   static String? s2Problem(double v) {
     if (v.isNaN || (v * 2) != (v * 2).roundToDouble()) return 'Deviation must be a multiple of 0.5 (e.g. +2.0, -1.5).';
@@ -64,7 +67,7 @@ class StrategyConfig {
   }
 
   void writeTo(TcConfig c) {
-    c.s2_dev1 = (s2Dev1 * 2).round(); c.s2_dev2 = (s2Dev2 * 2).round(); c.s2_dev3 = (s2Dev3 * 2).round();
+    c.s2_cnt1 = s2Cnt1; c.s2_cnt2 = s2Cnt2; c.s2_cnt3 = s2Cnt3; c.s2_dev1 = (s2Dev1 * 2).round(); c.s2_dev2 = (s2Dev2 * 2).round(); c.s2_dev3 = (s2Dev3 * 2).round();
     c.trigger_mode = triggerMode; c.trigger_dev2 = (triggerDeviation * 2).round(); // exact: deviations are multiples of 0.5
     c.market = market; c.direction = direction; c.recovery_direction1 = recoveryDirection1; c.recovery_direction2 = recoveryDirection2; c.initial_barrier = initialBarrier;
     c.recovery_barrier1 = recoveryBarrier1; c.recovery_barrier2 = recoveryBarrier2; c.trigger_digit = triggerDigit;

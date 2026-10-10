@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 S = {
  "TcConfig": (["market","direction","initial_barrier","recovery_barrier1","recovery_barrier2","trigger_digit",
    "consecutive_count","deviation_direction","martingale_enabled","martingale_max_steps",
-   "max_consecutive_losses","win_behavior","loss_dev_filter","recovery_direction1","recovery_direction2","trigger_mode","trigger_dev2","s2_dev1","s2_dev2","s2_dev3"],
+   "max_consecutive_losses","win_behavior","loss_dev_filter","recovery_direction1","recovery_direction2","trigger_mode","trigger_dev2","s2_dev1","s2_dev2","s2_dev3","s2_cnt1","s2_cnt2","s2_cnt3"],
   ["stake","take_profit","stop_loss","martingale_multiplier","max_stake","max_daily_loss"], []),
  "TcTickResult": (["action","error_code","trade_id","digit","direction","barrier","payload_len","t_digit_us","t_trigger_us"],
   ["stake"], []),

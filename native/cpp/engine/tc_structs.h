@@ -25,6 +25,9 @@ typedef struct TcConfig {
   int64_t s2_dev1;
   int64_t s2_dev2;
   int64_t s2_dev3;
+  int64_t s2_cnt1;
+  int64_t s2_cnt2;
+  int64_t s2_cnt3;
   double stake;
   double take_profit;
   double stop_loss;
